@@ -1,0 +1,286 @@
+:root {
+  --bg: #07090b;
+  --bg-2: #0d1114;
+  --text: #f3f6f7;
+  --muted: #95a1a8;
+  --line: rgba(255, 255, 255, 0.12);
+  --accent: #4cc4dc;            /* cyan của logo Store Detailing */
+  --accent-ink: #03161b;
+  --glow: rgba(76, 196, 220, 0.45);
+  --display: "Archivo", "Arial Narrow", sans-serif;
+  --body: "Inter", system-ui, sans-serif;
+  --gutter: clamp(16px, 4vw, 56px);
+}
+
+* { box-sizing: border-box; margin: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 400 16px/1.6 var(--body);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+a { color: inherit; text-decoration: none; }
+img { display: block; max-width: 100%; height: auto; }
+
+/* ---------- Loader ---------- */
+.loader {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 22px;
+  background: var(--bg);
+  transition: opacity 0.7s ease, visibility 0.7s;
+}
+.loader img { width: 150px; }
+.loader.is-done { opacity: 0; visibility: hidden; }
+.loader-bar { width: 180px; height: 2px; background: var(--line); overflow: hidden; }
+.loader-bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
+.loader-pct { color: var(--muted); font-size: 12px; letter-spacing: 0.1em; max-width: 320px; text-align: center; }
+
+/* ---------- Nav ---------- */
+.nav {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px var(--gutter);
+  background: linear-gradient(to bottom, rgba(7, 9, 11, 0.9), rgba(7, 9, 11, 0));
+}
+.brand img { width: 112px; }
+.nav-links { display: flex; gap: 28px; margin-left: auto; font-size: 14px; color: var(--muted); text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6); }
+.nav-links a:hover { color: var(--text); }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 22px;
+  border-radius: 999px;
+  font: 600 14px/1 var(--body);
+  white-space: nowrap;
+  transition: transform 0.2s, box-shadow 0.2s, background 0.2s, border-color 0.2s;
+}
+.btn:hover { transform: translateY(-1px); }
+.btn-light { background: var(--text); color: var(--bg); padding: 10px 18px; font-size: 13px; }
+.btn-accent { background: var(--accent); color: var(--accent-ink); }
+.btn-accent:hover { box-shadow: 0 0 28px 2px var(--glow); }
+.btn-ghost { border: 1px solid var(--line); background: rgba(255, 255, 255, 0.03); }
+.btn-ghost:hover { border-color: var(--accent); }
+
+/* ---------- Scroll-driven build ---------- */
+.build { position: relative; height: 820vh; }
+
+.stage {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+}
+
+#frames { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+.shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(7, 9, 11, 0.9) 0%, rgba(7, 9, 11, 0.55) 30%, rgba(7, 9, 11, 0) 52%),
+    linear-gradient(to top, rgba(7, 9, 11, 0.85) 0%, rgba(7, 9, 11, 0) 20%);
+}
+
+.copy {
+  position: absolute;
+  left: var(--gutter);
+  top: 50%;
+  width: min(470px, calc(100% - 2 * var(--gutter)));
+  opacity: 0;
+  transform: translateY(calc(var(--base, -50%) + var(--y, 24px)));
+  pointer-events: none;
+  will-change: opacity, transform;
+}
+.copy.is-active { pointer-events: auto; }
+
+.kicker {
+  color: var(--accent);
+  font: 900 clamp(26px, 3.6vw, 52px)/1.1 var(--display);
+  font-stretch: 78%;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.eyebrow {
+  color: var(--muted);
+  font: 600 12px/1.4 var(--body);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+.eyebrow b { color: var(--accent); font-weight: 700; }
+
+/* Chữ hoa tiếng Việt có dấu chồng nhau (Ệ, Ấ…) nên cần line-height thoáng hơn tiếng Anh. */
+h1, h2 {
+  font-family: var(--display);
+  font-weight: 900;
+  font-stretch: 78%;
+  text-transform: uppercase;
+  line-height: 1.04;
+  letter-spacing: 0.005em;
+  text-wrap: balance;
+}
+h1 { font-size: clamp(40px, 5.6vw, 84px); }
+h2 { font-size: clamp(34px, 4.6vw, 68px); }
+h3 { font: 700 17px/1.3 var(--body); }
+
+.lede { margin-top: 20px; color: var(--muted); max-width: 40ch; font-size: 15px; }
+
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 28px; }
+.round {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+}
+.round svg, .chat svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Danh sách dịch vụ: đứng yên suốt lúc xe lắp ráp, chỉ có tên dịch vụ. */
+.services { list-style: none; padding: 0; margin-top: 4px; }
+.services li {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+  font: 600 clamp(16px, 1.5vw, 20px)/1.35 var(--body);
+}
+.services li:last-child { border-bottom: 0; }
+.services b {
+  min-width: 22px;
+  color: var(--accent);
+  font: 800 13px/1 var(--display);
+  letter-spacing: 0.1em;
+}
+
+.progress {
+  position: absolute;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+.hint { font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--muted); transition: opacity 0.3s; }
+.track { width: 140px; height: 2px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.track i { display: block; height: 100%; width: 100%; background: var(--accent); transform-origin: left; transform: scaleX(0); }
+
+/* ---------- Sections after the build ---------- */
+.section { padding: clamp(88px, 14vh, 150px) var(--gutter); max-width: 1240px; margin: 0 auto; }
+.section h2 { max-width: 20ch; }
+.nowrap { white-space: nowrap; }
+
+.pillars {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  margin-top: 56px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  overflow: hidden;
+}
+.pillars article { padding: 30px 26px 34px; background: var(--bg); }
+.pillars b {
+  display: block;
+  margin-bottom: 18px;
+  color: var(--accent);
+  font: 900 30px/1 var(--display);
+  font-stretch: 80%;
+}
+.pillars p { margin-top: 10px; color: var(--muted); font-size: 14px; }
+
+.showroom { border-top: 1px solid var(--line); }
+.branches { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 48px; }
+.branch {
+  display: grid;
+  gap: 8px;
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: linear-gradient(140deg, rgba(76, 196, 220, 0.07), transparent 55%), var(--bg-2);
+  transition: border-color 0.2s, transform 0.2s;
+}
+.branch:hover { border-color: rgba(76, 196, 220, 0.5); transform: translateY(-2px); }
+.branch span { color: var(--muted); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; }
+.branch strong { font: 600 19px/1.4 var(--body); }
+.branch em { font-style: normal; color: var(--accent); font-size: 14px; }
+.contact { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 32px var(--gutter) 96px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13px;
+}
+.footer img { width: 96px; }
+.footer div { flex: 1; }
+.footer a:hover { color: var(--accent); }
+
+.chat {
+  position: fixed;
+  right: var(--gutter);
+  bottom: 22px;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 16px;
+  border: 1px solid rgba(76, 196, 220, 0.35);
+  border-radius: 999px;
+  background: rgba(13, 17, 20, 0.82);
+  backdrop-filter: blur(8px);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ---------- Tablet / mobile ---------- */
+@media (max-width: 960px) {
+  .pillars { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 760px) {
+  .nav-links { display: none; }
+  .brand img { width: 96px; }
+  .shade {
+    background:
+      linear-gradient(to bottom, rgba(7, 9, 11, 0.94) 0%, rgba(7, 9, 11, 0.75) 42%, rgba(7, 9, 11, 0) 60%),
+      linear-gradient(to top, rgba(7, 9, 11, 0.9) 0%, rgba(7, 9, 11, 0) 25%);
+  }
+  .copy { top: 92px; --base: 0%; }
+  .kicker { font-size: 24px; }
+  h1 { font-size: 40px; }
+  h2 { font-size: 34px; }
+  .lede { font-size: 14px; margin-top: 14px; }
+  .actions { margin-top: 20px; }
+  .services li { padding: 10px 0; font-size: 15px; }
+  .progress { bottom: 84px; }
+  .pillars, .branches { grid-template-columns: 1fr; }
+  .footer { flex-direction: column; align-items: flex-start; }
+}

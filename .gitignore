@@ -1,0 +1,5 @@
+# Video 4K gốc (~37 MB), chỉ dùng để làm lại frame, không cần cho web
+source/
+.claude/
+__pycache__/
+*.pyc

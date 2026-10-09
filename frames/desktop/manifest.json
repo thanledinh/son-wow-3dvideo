@@ -1,0 +1,9 @@
+{
+    "count":  240,
+    "width":  1600,
+    "height":  900,
+    "pattern":  "frames/desktop/frame_{n}.webp",
+    "pad":  4,
+    "fit":  "auto",
+    "posX":  0.7
+}

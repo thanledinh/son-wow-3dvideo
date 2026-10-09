@@ -1,0 +1,9 @@
+{
+    "count":  240,
+    "width":  960,
+    "height":  540,
+    "pattern":  "frames/mobile/frame_{n}.webp",
+    "pad":  4,
+    "fit":  "auto",
+    "posX":  0.7
+}
