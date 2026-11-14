@@ -19,13 +19,26 @@ const hero = chapters[0]?.imgs[0];
 let heroBlob = null;
 let heroUrl = "";
 let heroSeen = false;
-if (hero) fetch(hero.src).then((r) => r.blob()).then((b) => (heroBlob = b)).catch(() => {});
+let heroFetching = false;
+function fetchHero() {
+  if (!hero || heroBlob || heroFetching) return;
+  heroFetching = true;
+  // (tải một lần duy nhất: file về thành blob, rồi chính blob đó là ảnh; cùng blob dùng lại cho các lần chạy lại)
+  fetch(hero.dataset.src)
+    .then((r) => r.blob())
+    .then((b) => {
+      heroBlob = b;
+      hero.dataset.loaded = "1";
+      replayHero();
+    })
+    .catch(() => (heroFetching = false));
+}
 function replayHero() {
-  if (!hero) return;
-  const next = heroBlob ? URL.createObjectURL(heroBlob) : `${hero.src.split("&r=")[0]}&r=${Date.now()}`;
+  if (!hero || !heroBlob) return;       // (chưa có file về thì ảnh còn đang chạy lần đầu, khỏi nạp lại)
+  const next = URL.createObjectURL(heroBlob);
   hero.src = next;
   if (heroUrl) URL.revokeObjectURL(heroUrl);
-  heroUrl = heroBlob ? next : "";
+  heroUrl = next;
 }
 const track = document.createElement("div");
 track.className = "deck-track";
@@ -53,7 +66,10 @@ function build() {
       deck.innerHTML = `<div class="lift" style="--n:${group.length}"><div class="deck-row"></div></div>`;
       const row = deck.querySelector(".deck-row");
       for (const img of group) {
-        img.loading = "eager";
+        // poster chưa tới lượt thì chưa tải (bớt ~6 MB lúc mở trang): giữ địa chỉ trong data-src, hàm warm() gán lại khi sắp tới.
+        // (bỏ src TRƯỚC khi đụng tới loading: đặt loading="eager" lúc còn src là trình duyệt tải ngay)
+        if (!img.dataset.src) img.dataset.src = img.getAttribute("src");
+        if (!img.dataset.loaded) img.removeAttribute("src");
         row.appendChild(img);
       }
       stage.appendChild(deck);
@@ -234,12 +250,31 @@ function paintSpray(t, k) {
   c.restore();
 }
 
+// Tải poster của trang i khi sắp tới lượt (xem build(): ban đầu các poster chưa có src).
+function warm(i) {
+  const deck = decks[i];
+  if (!deck) return;
+  for (const img of deck.querySelectorAll(".poster")) {
+    if (img === hero) continue;                  // tấm đầu tải qua fetchHero()
+    if (img.getAttribute("src")) continue;
+    img.loading = "eager";
+    img.src = img.dataset.src;
+    img.dataset.loaded = "1";
+  }
+  if (i === 0) fetchHero();
+}
+
 function turn() {
   const { top, range, seg } = span();
   const stageOn = top < innerHeight * 0.5 && top > -range - innerHeight * 0.5;
+  if (top < innerHeight * 3) {                       // còn cách sân khấu ~3 màn hình: bắt đầu tải hai trang đầu
+    warm(0);
+    warm(1);
+  }
   root.classList.toggle("pg-stage", stageOn);
   const u = Math.min(range - 0.01, Math.max(0, -top)) / seg;
   const k = Math.floor(u);
+  if (stageOn) for (let i = k; i <= k + 2; i++) warm(i);    // trang đang xem và hai trang kế
   // tấm đầu là ảnh động chạy một lần: mỗi lần lướt tới lại thì cho chạy lại từ đầu
   const heroNow = stageOn && k === 0 && u - k < 0.35;
   if (heroNow && !heroSeen) replayHero();
