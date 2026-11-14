@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Phủ gầm — Store Detailing</title>
+  <meta name="description" content="Phủ gầm chống rỉ tại Store Detailing: nâng xe lên cầu, che chắn kỹ rồi phun đa lớp, màng phủ dày 1.5 – 2 mm. Ba gói gốc dầu, gốc nước, quang phổ, bảo hành 2 – 5 năm.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Phủ gầm — Store Detailing">
+  <meta property="og:image" content="assets/og.jpg">
+  <meta name="theme-color" content="#07090b">
+  <link rel="icon" href="assets/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/phu-gam.css">
+  <link rel="stylesheet" href="css/phu-gam-info.css">
+  <link rel="stylesheet" href="css/phu-gam-gate.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./js/vendor/three/three.module.js",
+        "three/addons/": "./js/vendor/three/addons/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div class="loader" id="loader">
+    <img src="assets/logo.png" alt="Store Detailing" width="252" height="81">
+    <div class="loader-bar"><i id="loaderFill"></i></div>
+    <span class="loader-pct" id="loaderPct">0%</span>
+  </div>
+
+  <!-- Màn mở đầu: chìa khóa + nút START (lấy từ daily.zappa.vn, css/phu-gam-gate.css, js/phu-gam-gate.js). Hiện sau khi tải
+       đủ 100% (trước đó là màn tải #loader); nhấn START thì nẹt bô và mở màn. -->
+  <div id="gate" aria-label="Màn mở đầu: nhấn START để vào xưởng phủ gầm">
+    <div class="gate-bg"></div>
+    <div class="gate-beam" aria-hidden="true"></div>
+    <div class="gate-inner">
+      <div class="gate-top"><img class="gate-logo" src="assets/phu-gam/gb-logo.webp" alt="GB Premium Car Care" width="236" height="116"></div>
+      <div class="key-stage">
+        <div class="key-tilt" id="gateTilt"><div class="key-float"><div class="key" id="gateKey" aria-hidden="true"></div></div></div>
+        <div class="key-shadow"></div>
+      </div>
+      <div class="ignition">
+        <button id="gateStart" class="start" type="button" aria-label="Khởi động và vào xưởng phủ gầm">
+          <svg class="tacho" viewBox="0 0 200 200" aria-hidden="true">
+            <defs><linearGradient id="gate-tg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#4cc4dc"/><stop offset=".7" stop-color="#8fe0f0"/><stop offset="1" stop-color="#d0402f"/></linearGradient></defs>
+            <g id="gateTicks"></g>
+            <circle class="t-track" cx="100" cy="100" r="88"/>
+            <circle class="t-fill" id="gateFill" cx="100" cy="100" r="88"/>
+          </svg>
+          <span class="start-face">
+            <svg class="pwr" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v8"/><path d="M6.4 6.6a8 8 0 1 0 11.2 0"/></svg>
+            <span class="st-small">Engine</span>
+            <span class="st-big">Start</span>
+            <span class="st-small">Stop</span>
+          </span>
+        </button>
+        <p class="gate-hint" id="gateHint" role="status">Nhấn <b>START</b> để vào xưởng</p>
+        <p class="rpm" aria-hidden="true"><span id="gateRpm">0.0</span> ×1000 r/min</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cảnh 3D cố định phía sau; phần câu chuyện và phần xoay xem gầm trong suốt để lộ cảnh ra. -->
+  <canvas class="gam-canvas" id="gam" aria-label="Xe Innova trên cầu nâng, gầm xe được phủ đen dần khi cuộn trang"></canvas>
+  <div class="gam-vignette" aria-hidden="true"></div>
+
+  <header class="nav">
+    <nav class="nav-links">
+      <a href="#xem-gam">Xoay xem gầm</a>
+      <a href="#ba-dong">Sản phẩm</a>
+      <a href="#dai-ly">Chính sách đại lý</a>
+      <a href="#lien-he">Liên hệ</a>
+      <a href="tel:0378788898">0378 78 88 98</a>
+    </nav>
+    <!-- nhạc nền (assets/phu-gam/nhac-nen.mp3, lấy từ daily.zappa.vn): bật khi bấm START, nút này để tắt / bật -->
+    <button class="icon-btn" id="sound" type="button" aria-pressed="false" aria-label="Bật/tắt nhạc nền">
+      <svg class="on" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+      <svg class="off" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9l5 6M22 9l-5 6"/></svg>
+    </button>
+  </header>
+
+  <main>
+    <section class="story" id="story" data-stop="Xe phủ gầm">
+      <!-- Không đặt chữ đè lên cảnh 3D: chỉ có thanh tiến độ. Tiêu đề và quy trình nằm ở phần bên dưới. -->
+      <div class="stage">
+        <div class="progress" aria-hidden="true">
+          <div class="track"><i id="progressFill"></i></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="explore" id="xem-gam" data-stop="Xoay xem gầm" aria-label="Xoay xem gầm: kéo để xoay xe"></section>
+
+    <!-- Sau cảnh 3D: phần thông tin, dựng theo trang bảng giá đại lý daily.zappa.vn (css/phu-gam-info.css).
+         Mỗi trang là ảnh poster gốc của hãng GB: assets/phu-gam/info/poster-<tên>.webp (1080×1920). Đổi giá thì thay ảnh
+         cùng tên và sửa chữ mô tả (alt) cho khớp. Mỗi [data-stop] là một chấm trên thanh lộ trình. -->
+    <div class="boards">
+      <section class="page" id="phu-gam-gb" data-stop="Phủ gầm GB" aria-label="Phủ gầm cao cấp GB">
+        <h1 class="sr-only">Phủ gầm GB · Store Detailing</h1>
+        <img class="poster" src="assets/phu-gam/info/poster-cao-cap.webp?v=2" width="1080" height="1920" alt="Phủ gầm cao cấp GB Premium Car Care (ảnh động tự chạy lặp lại), bí quyết giữ cho xe luôn mới và bền bỉ: ba dòng UBS R, UBS B (sản xuất tại Đức) và Spectrum (sản xuất tại Mỹ).">
+      </section>
+
+      <section class="page" id="ba-dong" data-stop="Ba dòng phủ gầm" aria-label="Ba dòng phủ gầm GB: UBS B gốc dầu, UBS R gốc nước, quang phổ">
+        <div class="poster-grid">
+          <img class="poster" loading="lazy" decoding="async" src="assets/phu-gam/info/poster-ubs-b.webp" width="1080" height="1920" alt="Phủ gầm UBS B (gốc dầu): thành phần 80% nhựa đường, 20% chất bay hơi, sản xuất tại Đức, bảo hành trọn đời. Tính năng: độ bám dính cao, thời gian khô nhanh; chống ăn mòn vượt trội; bề mặt phủ mịn và đồng đều; chống thấm nước và muối, bảo vệ gầm xe không gỉ sét.">
+          <img class="poster" loading="lazy" decoding="async" src="assets/phu-gam/info/poster-ubs-r.webp" width="1080" height="1920" alt="Phủ gầm UBS R (gốc nước): 80% cao su butyl, 100% gốc nước, sản xuất tại Đức, bảo hành trọn đời. Tính năng: thân thiện với môi trường và người dùng; chống thấm nước và muối; tăng độ dày lớp phủ và độ bám dính; bảo vệ gầm khỏi đá văng và va quẹt nhẹ; chống mài mòn cao.">
+          <img class="poster" loading="lazy" decoding="async" src="assets/phu-gam/info/poster-quang-pho.webp" width="1080" height="1920" alt="Phủ gầm quang phổ GB Spectrum: 100% gốc nước, sản xuất tại Mỹ, bảo hành trọn đời. Tính năng: cách âm, giảm ồn với công nghệ hạt siêu vi tiêu âm; chống thấm nước và chất ăn mòn; lớp phủ dày gấp 2 lần gốc dầu; bảo vệ gầm khỏi đá văng và va quẹt nhẹ.">
+        </div>
+      </section>
+
+      <section class="page" id="san-pham" data-stop="Sản phẩm và súng phun" aria-label="Sản phẩm phủ gầm GB và súng phun">
+        <div class="poster-grid">
+          <img class="poster" loading="lazy" decoding="async" src="assets/phu-gam/info/poster-ubs-b-sung.webp" width="1080" height="1920" alt="GB UBS B bảo vệ khung gầm, chống gỉ và ăn mòn: độ bám dính cao, chống lão hóa mạnh mẽ, chống va đập và trầy xước, khối lượng tịnh 1.5 kg, sản xuất tại Đức.">
+          <img class="poster" loading="lazy" decoding="async" src="assets/phu-gam/info/poster-ubs-r-sung.webp" width="1080" height="1920" alt="GB UBS R lớp phủ gầm gốc nước cao su butyl: chống gỉ sét và ăn mòn, bảo vệ môi trường và người dùng, hàm lượng chất rắn cao, chống cháy, khối lượng tịnh 1.5 kg.">
+          <img class="poster" loading="lazy" decoding="async" src="assets/phu-gam/info/poster-spectrum.webp" width="1080" height="1920" alt="GB Spectrum bảo vệ khung gầm, chống gỉ sét và ăn mòn: chống ăn mòn vượt trội, chống cháy, đàn hồi và cách âm tốt, hàm lượng chất rắn cao, an toàn cho người sử dụng, sản xuất tại Mỹ, khối lượng tịnh 1 kg.">
+        </div>
+      </section>
+
+      <section class="page" id="dai-ly" data-stop="Chính sách đại lý" aria-label="Chính sách đại lý phủ gầm GB: bảng giá, quà tặng hỗ trợ, khuyến mãi tái nhập">
+        <div class="poster-grid">
+          <img class="poster" loading="lazy" decoding="async" src="assets/phu-gam/info/poster-dai-ly-gia.webp" width="1080" height="1920" alt="Chính sách đại lý phủ gầm, danh mục sản phẩm. GB UBS B gốc dầu: đơn giá 230.000 giảm 10% còn 207.000, giá thùng 2.760.000 còn 2.484.000, combo 8 thùng 22.080.000. GB UBS R gốc nước: 295.500 còn 265.500, thùng 3.540.000 còn 3.186.000, combo 28.320.000. GB Quang Phổ: 330.000 còn 297.000, thùng 3.960.000 còn 3.564.000, combo 31.680.000. Tổng đơn 82.080.000, chiết khấu 8.208.000, thanh toán 73.872.000. Giá chưa gồm thuế GTGT và phí vận chuyển; gói hỗ trợ áp dụng cho đơn hàng đầu tiên; thanh toán tiền mặt hoặc chuyển khoản trước khi giao hàng.">
+          <img class="poster" loading="lazy" decoding="async" src="assets/phu-gam/info/poster-dai-ly-ho-tro.webp" width="1080" height="1920" alt="Danh mục hỗ trợ đại lý, combo quà tặng trị giá 22.100.000: 1 kệ trưng bày GB (12.000.000), 1 tranh báo giá phủ gầm (2.000.000), 1 bảng báo giá A4 (150.000), 1 bảng vẫy GB (2.000.000), 5 áo GB (1.000.000), 5 nón GB (1.000.000), 1 bạt trải capo GB (350.000), 1 súng phủ gầm GB (150.000), 1 súng phủ gầm quang phổ GB (500.000).">
+          <img class="poster" loading="lazy" decoding="async" src="assets/phu-gam/info/poster-dai-ly-tai-nhap.webp" width="1080" height="1920" alt="Chương trình khuyến mãi phủ gầm cho đơn hàng tái nhập (gốc dầu, gốc nước, quang phổ). Gói 1: tái nhập 2 thùng, tặng 1 súng phủ gầm GB. Gói 2: tái nhập 5 thùng, giảm 5%, tặng 2 súng. Gói 3: tái nhập 10 thùng, giảm 10%, tặng 2 súng.">
+        </div>
+      </section>
+
+      <section class="finish" id="lien-he" data-stop="Liên hệ" aria-label="Liên hệ đặt hàng">
+        <div class="flag" aria-hidden="true"></div>
+        <p class="milestone">Về đích</p>
+        <h2>Liên hệ<br>đặt hàng</h2>
+        <p class="leg-meta">Gọi hotline để báo giá và đặt hàng</p>
+        <a class="hotline" href="tel:0933333715">
+          <span class="ring"><svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg></span>
+          <span class="hl"><small>Hotline</small><b>09 33333 715</b></span>
+        </a>
+        <ul class="notes">
+          <li>Thanh toán tiền mặt hoặc chuyển khoản, trước khi giao hàng</li>
+          <li>Giá chưa bao gồm thuế GTGT và phí vận chuyển</li>
+        </ul>
+        <img class="finish-logo" src="assets/logo.png" alt="Store Detailing" width="252" height="81" loading="lazy">
+        <p class="copy">© 2026 Store Detailing · <a href="https://storedetailing.vn" target="_blank" rel="noopener">storedetailing.vn</a></p>
+        <!-- Các mô hình dưới đây theo giấy phép CC BY: bắt buộc ghi tên tác giả. -->
+        <p class="credit">Mô hình 3D (CC BY): <a href="https://sketchfab.com/models/c8e1bbc9292b4e198dba839c32f02fa9" target="_blank" rel="noopener">Toyota Kijang Innova Zenix 2023</a> – 3dshowroom; <a href="https://sketchfab.com/models/9052ee152fc24d24a686ba3816ac0607" target="_blank" rel="noopener">Chevy Impala Undercarriage</a> – omegadarling; <a href="https://sketchfab.com/3d-models/car-lift-1b4ae76820294373bc19ee16b9a4db61" target="_blank" rel="noopener">Car lift</a> – Sargone; <a href="https://sketchfab.com/3d-models/car-mechanic-0728feefdd174869ac7d22017cb5a077" target="_blank" rel="noopener">car mechanic</a> – BELAZ (đã đổi sang đồng phục tiệm, tạo dáng).</p>
+      </section>
+    </div>
+  </main>
+
+  <nav class="route" aria-label="Các chặng của trang">
+    <div class="route-now" id="routeNow">Xuất phát</div>
+    <div class="route-line" id="routeLine">
+      <div class="track"><i></i></div>
+      <svg class="route-car" viewBox="0 0 60 26" aria-hidden="true"><path fill="#8fe0f0" d="M4 18c0-3 2-5 6-5.6l8-5.4c2-1.3 4-2 7-2h9c3 0 5 .8 7 2.4l6 4.8c4 .5 8 2 9 4v4c0 1-1 2-2 2h-4a6 6 0 0 0-11 0H22a6 6 0 0 0-11 0H6c-1.2 0-2-.8-2-2z"/><circle cx="16.5" cy="20.5" r="4" fill="#8fe0f0"/><circle cx="44.5" cy="20.5" r="4" fill="#8fe0f0"/><path fill="#07080a" d="M20 12l5-3.6c1-.6 2-.9 3.4-.9H33v4.5zm15-4.5h1.5c1.6 0 2.8.5 4 1.4L44 12h-9z"/></svg>
+    </div>
+  </nav>
+
+  <script type="module" src="js/phu-gam-gate.js"></script>
+  <script type="module" src="js/phu-gam.js"></script>
+  <script type="module" src="js/phu-gam-info.js"></script>
+</body>
+</html>

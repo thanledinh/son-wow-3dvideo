@@ -1,0 +1,103 @@
+/* Phần thông tin dưới cảnh 3D của trang phủ gầm, dựng theo trang bảng giá đại lý daily.zappa.vn (repo store-pring,
+   web/index.html): mỗi hình của hãng là một trang poster, các trang nối nhau cuộn bình thường, thanh lộ trình có
+   chiếc xe chạy ở đáy màn hình, cuối cùng là trang "Liên hệ đặt hàng". Màu nhấn là xanh của logo thay cho vàng Zappa.
+   Markup trong phu-gam.html, thanh lộ trình và hiệu ứng hiện dần trong js/phu-gam-info.js. */
+:root {
+  --route-gap: max(24px, calc(env(safe-area-inset-bottom) + 14px));   /* thanh lộ trình cách đáy màn hình */
+  --pg-hi: #8fe0f0;
+  --pg-lo: #1f6f82;
+  --pg-line: rgba(76, 196, 220, 0.3);
+  --pg-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* thanh lộ trình thay cho thanh tiến độ cũ của đoạn 3D */
+.story .progress { display: none; }
+
+/* ---------- thanh lộ trình ---------- */
+.route {
+  position: fixed; left: 50%; bottom: var(--route-gap); z-index: 20; width: min(520px, calc(100% - 24px)); padding: 6px 24px 7px;
+  border-radius: 16px; background: rgba(10, 10, 12, 0.8); border: 1px solid var(--pg-line);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+  opacity: 0; transform: translate(-50%, 24px); transition: opacity 0.7s ease 0.15s, transform 0.7s var(--pg-out) 0.15s; pointer-events: none;
+}
+.route.is-on { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.route-now { text-align: center; font-size: 10px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; height: 14px; overflow: hidden; }
+.route-line { position: relative; height: 22px; margin: 0 6px; }
+.route-line .track { position: absolute; left: 0; right: 0; top: 10px; width: auto; height: 2px; border-radius: 2px; background: rgba(255, 255, 255, 0.12); }
+.route-line .track i { position: absolute; left: 0; top: 0; bottom: 0; width: calc(var(--p, 0) * 100%); border-radius: 2px; background: linear-gradient(90deg, var(--pg-lo), var(--pg-hi)); }
+.stop { position: absolute; top: 0; left: calc(var(--x) * 100%); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; color: var(--muted); }
+.stop b { width: 9px; height: 9px; margin-top: 6px; border-radius: 50%; background: #0d0d0f; border: 1px solid rgba(255, 255, 255, 0.35); transition: all 0.3s; }
+.stop::before { content: ""; position: absolute; inset: -10px -14px; }   /* vùng bấm rộng hơn chấm */
+.stop span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.stop.on b { width: 13px; height: 13px; margin-top: 4px; background: var(--pg-hi); border-color: var(--pg-hi); box-shadow: 0 0 12px rgba(143, 224, 240, 0.55); }
+.route-car { position: absolute; top: 1px; left: calc(var(--p, 0) * 100%); width: 30px; height: 13px; transform: translate(-50%, -62%); pointer-events: none; filter: drop-shadow(0 0 6px rgba(143, 224, 240, 0.6)); }
+@media (min-width: 640px) { .route { padding: 7px 32px 8px; } }
+
+/* ---------- các trang poster ----------
+   Không có script: các poster xếp chồng, cuộn bình thường. Có script (html.pg-js): js/phu-gam-info.js gom poster thành
+   từng trang trọn màn hình (.deck) trên một sân khấu dính (.deck-stage), xem phần cầu nâng bên dưới. */
+.boards { position: relative; z-index: 1; background: var(--bg); border-radius: 32px 32px 0 0; border-top: 1px solid rgba(255, 255, 255, 0.09); box-shadow: 0 -30px 90px rgba(0, 0, 0, 0.65); }
+.page { padding-top: 84px; }
+.page + .page { padding-top: 28px; }
+/* trang = ảnh poster gốc của hãng (1080 × 1920) */
+.poster { display: block; width: min(100% - 20px, 600px); height: auto; margin: 0 auto; border-radius: 18px; }
+.poster-grid { display: grid; grid-template-columns: 1fr; gap: 28px; }
+.pg-js .boards .page { display: none; }      /* poster đã được chuyển lên sân khấu */
+
+/* ---------- sân khấu: mỗi trang một màn hình, đổi trang bằng vệt phun phủ (thay cho cảnh xe kéo bảng của daily) ----------
+   .deck-track cao bằng số trang × một đoạn cuộn; .deck-stage dính trên màn hình suốt đoạn đó. Mỗi .deck là một trang
+   (máy tính: cả chặng ba tấm, điện thoại: một tấm). Khi đổi trang, một vệt phun đen (.deck-coat) quét từ trái sang phải:
+   phía trước vệt vẫn là trang cũ, phía sau vệt đã là trang mới, như lớp phủ gầm vừa phun lên che trang cũ rồi mở ra trang
+   mới. Trang cũ chỉ hiện ở bên phải mép đầu của vệt, trang mới chỉ hiện ở bên trái mép đuôi
+   (clip-path do js/phu-gam-info.js đặt, cùng hai mép với hình vẽ của vệt). */
+.deck-track { position: relative; }
+.deck-stage { position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden; border-radius: 32px 32px 0 0; }
+.deck { position: absolute; inset: 0; display: grid; place-items: center; padding: 66px 0 calc(var(--route-gap) + 62px); visibility: hidden; }
+.deck.on { visibility: visible; }
+.lift {
+  --n: 1;
+  /* poster cao vừa một màn hình, hoặc hẹp lại cho đủ --n tấm nằm gọn trong màn hình */
+  --ph: min(100svh - var(--route-gap) - 150px, (min(100vw, 1700px) - 36px - (var(--n) - 1) * 22px) / (var(--n) * 0.5625));
+}
+.deck-row { display: flex; gap: 22px; }
+.deck-row .poster { width: auto; height: var(--ph); aspect-ratio: 9 / 16; margin: 0; box-shadow: 0 24px 50px rgba(0, 0, 0, 0.55); }
+/* vệt phun: vẽ bằng canvas (js/phu-gam-info.js, hàm paintSpray): lớp phủ đen bóng ướt, mép loang tự nhiên, sương phun và cây
+   súng GB chạy dọc mép đầu. Phần trang cũ và trang mới được cắt bằng clip-path theo đúng hai mép của vệt. */
+.deck-coat { position: absolute; z-index: 2; inset: 0; width: 100%; height: 100%; pointer-events: none; visibility: hidden; }
+.pg-spray .deck-coat { visibility: visible; }
+
+/* ---------- về đích: liên hệ đặt hàng ---------- */
+.finish { padding: 110px 16px calc(var(--route-gap) + 110px); text-align: center; }
+.flag {
+  height: 28px; max-width: 760px; width: 100%; margin: 0 auto 44px;
+  background: repeating-conic-gradient(rgba(76, 196, 220, 0.22) 0 25%, transparent 0 50%) 0 0 / 14px 14px;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent); mask-image: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent);
+}
+.milestone { font-size: 11px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
+.finish h2 { max-width: none; }
+.leg-meta { margin-top: 14px; color: var(--muted); font-size: 14px; }
+.hotline {
+  display: inline-flex; align-items: center; gap: 16px; margin-top: 34px; padding: 16px 30px 16px 18px; border-radius: 999px;
+  border: 1px solid rgba(143, 224, 240, 0.55); background: linear-gradient(180deg, rgba(20, 28, 32, 0.9), rgba(10, 12, 13, 0.94));
+  box-shadow: 0 0 0 6px rgba(76, 196, 220, 0.06), 0 20px 40px rgba(0, 0, 0, 0.5); transition: box-shadow 0.3s, transform 0.3s var(--pg-out);
+}
+.hotline:hover { transform: translateY(-2px); box-shadow: 0 0 0 6px rgba(76, 196, 220, 0.12), 0 0 34px rgba(143, 224, 240, 0.25), 0 20px 40px rgba(0, 0, 0, 0.5); }
+.hotline .ring { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: var(--pg-hi); color: var(--accent-ink); flex: none; }
+.hotline .ring svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.hotline .hl { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.1; }
+.hotline .hl small { font-size: 10.5px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--accent); }
+.hotline .hl b { font-weight: 600; font-size: clamp(26px, 7vw, 36px); letter-spacing: 0.02em; font-variant-numeric: lining-nums; }
+.notes { display: grid; gap: 6px; margin: 30px 0 0; padding: 0; list-style: none; color: var(--muted); font-size: 13.5px; }
+.finish-logo { display: block; height: 34px; width: auto; margin: 48px auto 0; opacity: 0.85; }
+.copy { margin-top: 18px; font-size: 12px; color: var(--muted); letter-spacing: 0.06em; }
+.credit { max-width: 760px; margin: 14px auto 0; font-size: 11.5px; line-height: 1.6; color: var(--muted); }
+.credit a { text-decoration: underline; text-underline-offset: 2px; }
+
+/* ---------- hiện dần khi cuộn tới (chỉ khi script chạy) ---------- */
+.rv-js .rv { opacity: 0; transform: perspective(900px) translate3d(0, 40px, -140px); transition: opacity 0.9s ease calc(var(--i, 0) * 90ms), transform 1.2s var(--pg-out) calc(var(--i, 0) * 90ms); }
+.rv-js .rv.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .rv-js .rv { opacity: 1; transform: none; transition: none; }
+}

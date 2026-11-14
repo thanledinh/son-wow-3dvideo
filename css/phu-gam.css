@@ -1,0 +1,36 @@
+/* Trang phủ gầm: cảnh three.js cố định phía sau, câu chuyện cuộn và phần xoay xem gầm nằm trong suốt bên trên. */
+
+.gam-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 0;
+}
+/* studio vignette over the 3D (the dealer site's 911 has one in its post) */
+.gam-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 75% 70% at 50% 50%, transparent 45%, rgba(0, 0, 0, 0.55) 100%);
+}
+
+main { position: relative; z-index: 1; }
+
+/* ---------- Câu chuyện cuộn ---------- */
+.story { position: relative; height: 760vh; }
+
+/* ---------- Xoay xem gầm ---------- */
+.explore {
+  position: relative;
+  height: 100vh;
+  height: 100svh;
+  cursor: grab;
+  /* Vuốt dọc vẫn cuộn trang, vuốt ngang để xoay xe. */
+  touch-action: pan-y;
+  user-select: none;
+}
+.explore.is-dragging { cursor: grabbing; }
+

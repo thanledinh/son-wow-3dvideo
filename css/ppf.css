@@ -1,0 +1,142 @@
+/* Trang PPF: ảnh xe thật + sơ đồ bóc tách các lớp PPF, chạy theo cuộn. Dùng chung nền tảng với css/style.css. */
+
+.peel { position: relative; height: 480vh; }
+.peel .stage { background: var(--bg); }
+
+.car {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  width: 3840px;
+  height: 2143px;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.pin {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px rgba(76, 196, 220, 0.25), 0 0 24px 4px var(--glow);
+  opacity: 0;
+  pointer-events: none;
+}
+.pin::after {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  animation: pin-pulse 1.8s ease-out infinite;
+}
+@keyframes pin-pulse {
+  from { transform: scale(0.6); opacity: 1; }
+  to { transform: scale(2.2); opacity: 0; }
+}
+
+/* ---------- Sơ đồ bóc tách ----------
+   Bốn tấm vuông cạnh --s xoay isometric (rotateX 60° sau rotateZ -45°), không phối cảnh nên không méo.
+   Nâng một tấm lên --z trong không gian 3D thì trên màn hình nó đi lên đúng --z × sin 60° ≈ 0.866,
+   chú thích dịch theo cùng công thức để luôn nằm ngang hàng với tấm của nó.
+   JS chỉ đặt --e (0 = dán kín, 1 = tách hẳn) trên .diagram; mỗi lớp có số thứ tự --i từ dưới lên. */
+.copy-diagram { width: min(600px, calc(100% - 2 * var(--gutter))); }
+
+.diagram {
+  --s: clamp(130px, 15vw, 210px);
+  --lift: calc(var(--s) * 0.5);           /* khoảng cách 3D giữa hai lớp khi tách hẳn */
+  --e: 0;
+  position: relative;
+  height: calc(var(--s) * 0.707 + var(--lift) * 3 * 0.866 + 12px);
+}
+[data-layer="1"] { --i: 1; }
+[data-layer="2"] { --i: 2; }
+[data-layer="3"] { --i: 3; }
+:where(.plate, .labels li) { --i: 0; --z: calc(var(--i) * (2px + var(--lift) * var(--e))); }
+
+.stack {
+  position: absolute;
+  left: calc(var(--s) * 0.207);
+  bottom: calc(var(--s) * -0.146 + 6px);  /* đáy hình chiếu của tấm dưới cùng chạm đáy khung */
+  width: var(--s);
+  height: var(--s);
+  transform: rotateX(60deg) rotateZ(-45deg);
+  transform-style: preserve-3d;
+}
+
+.plate {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  transform: translateZ(var(--z));
+}
+.plate.paint {
+  background:
+    linear-gradient(120deg, transparent 38%, rgba(255, 255, 255, 0.16) 48%, transparent 58%),
+    linear-gradient(135deg, #20252b, #050607 60%, #15191d);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6);
+}
+.plate.glue {
+  background:
+    radial-gradient(rgba(255, 255, 255, 0.3) 1px, transparent 1.6px) 0 0 / 9px 9px,
+    rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+}
+.plate.tpu {
+  background: linear-gradient(135deg, rgba(76, 196, 220, 0.3), rgba(76, 196, 220, 0.06) 70%);
+  border: 1px solid rgba(76, 196, 220, 0.75);
+  box-shadow: 0 0 28px rgba(76, 196, 220, 0.3);
+}
+.plate.topcoat {
+  background:
+    linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.4) 42%, transparent 54%),
+    rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+}
+
+.labels { list-style: none; padding: 0; }
+.labels li {
+  position: absolute;
+  left: calc(var(--s) * 1.414 + 28px);
+  bottom: calc(var(--s) * 0.354 + 6px);   /* ngang tâm hình chiếu của tấm dưới cùng */
+  display: grid;
+  gap: 2px;
+  white-space: nowrap;
+  transform: translateY(calc(50% - var(--z) * 0.866));
+  /* Chú thích hiện lần lượt từ lớp trên cùng xuống khi các lớp tách ra. */
+  opacity: clamp(0, calc((var(--e) - 0.15 - (3 - var(--i)) * 0.2) * 6), 1);
+}
+.labels li::before {
+  content: "";
+  position: absolute;
+  right: calc(100% + 6px);
+  top: 50%;
+  width: 22px;
+  border-top: 1px solid rgba(255, 255, 255, 0.35);
+}
+.labels b { font: 600 15px/1.3 var(--body); }
+.labels span { color: var(--muted); font-size: 13px; }
+.labels li[data-layer="2"] b { color: var(--accent); }
+
+.diagram-cta { margin-top: 28px; opacity: 0; }
+.chips { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.chips li {
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+  background: rgba(7, 9, 11, 0.45);
+}
+
+@media (max-width: 760px) {
+  .diagram { --s: 118px; }
+  .labels li { left: calc(var(--s) * 1.414 + 20px); }
+  .labels li::before { width: 14px; }
+  .labels b { font-size: 13px; }
+  .labels span { display: none; }
+  .diagram-cta { margin-top: 18px; }
+}
