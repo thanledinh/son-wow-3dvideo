@@ -519,6 +519,7 @@ export function createWorker(workerGltf, scene, styleIn = {}) {
   const UP = new THREE.Vector3(0, 1, 0);
   const tgt = new THREE.Vector3();
   const headT = new THREE.Vector3();
+  const headW = new THREE.Vector3();
   const aimPt = new THREE.Vector3();
   const ground = new THREE.Object3D();
   const fwdV = new THREE.Vector3();
@@ -530,6 +531,17 @@ export function createWorker(workerGltf, scene, styleIn = {}) {
     Left: bones.LeftFoot.getWorldPosition(new THREE.Vector3()),
     Right: bones.RightFoot.getWorldPosition(new THREE.Vector3()),
   };
+
+  // The feet's rest turn (in the worker's unturned space): each foot is put back to it, flat on the floor, after its leg
+  // is solved (left to the leg it tilted with the shin as the foot lifted, and the sole never stayed on the floor).
+  const footQ = {
+    Left: bones.LeftFoot.getWorldQuaternion(new THREE.Quaternion()),
+    Right: bones.RightFoot.getWorldQuaternion(new THREE.Quaternion()),
+  };
+  const footTurn = new THREE.Quaternion();
+  const footPitch = new THREE.Quaternion();
+  const PITCH_AXIS = new THREE.Vector3(1, 0, 0);
+  const PITCH_SIGN = 1; // + lifts the heel (toe down); flip if the foot tips the wrong way
 
   // Each hand's own frame, read from the rest pose: F wrist to middle knuckle, P out of the palm.
   // Then `fit`, the turn from the gun's frame to the hand's, and `offset`, the held point seen from the wrist.
@@ -646,8 +658,16 @@ export function createWorker(workerGltf, scene, styleIn = {}) {
       ground.rotation.y = yaw;
       ground.updateMatrixWorld(true);
       root.rotation.order = "YXZ";
-      root.position.set(s.at.x + rightV.x * 0.025 * sway, -crouch + dip, s.at.z + rightV.z * 0.025 * sway);
-      root.rotation.set(0, yaw + 0.06 * sway, 0.035 * gait * Math.sin(stride));
+      // Idle life that never stops (the user: he looks stiff): weight drifts from one leg to the other, the hips swing
+      // a little as he walks, the chest rises with each breath, the head wanders off the spot now and then.
+      const shift = Math.sin(clock * 0.7 + strokePhase) * (1 - 0.6 * gait);
+      const breath = Math.sin(clock * 2.1 + strokePhase);
+      root.position.set(
+        s.at.x + rightV.x * (0.025 * sway + 0.012 * shift),
+        -crouch + dip + 0.004 * breath,
+        s.at.z + rightV.z * (0.025 * sway + 0.012 * shift),
+      );
+      root.rotation.set(0.01 * Math.sin(clock * 0.9 + 1), yaw + 0.06 * sway + 0.07 * gait * Math.sin(stride) + 0.025 * shift, 0.035 * gait * Math.sin(stride) + 0.02 * shift);
       for (const [b, q] of rest) b.quaternion.copy(q);
       root.updateMatrixWorld(true);
 
@@ -666,13 +686,23 @@ export function createWorker(workerGltf, scene, styleIn = {}) {
           .add(new THREE.Vector3(Math.sin(yaw), -0.2, Math.cos(yaw)).multiplyScalar(0.6))
           .add(new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw)).multiplyScalar(0.12 * sign));
         reach(bones[`${side}UpLeg`], bones[`${side}Leg`], bones[`${side}Foot`], foot, knee);
+        // the sole stays level with the floor; stepping, the heel lifts as the foot leaves (toe-off), the toe rises as
+        // it swings forward and lands heel first
+        const heelUp = stance ? THREE.MathUtils.clamp((u - 0.3) / 0.2, 0, 1) : 0; // late in the stance
+        const toeUp = stance ? 0 : Math.sin(Math.PI * (2 * u - 1)); // in the swing
+        footPitch.setFromAxisAngle(PITCH_AXIS, gait * (PITCH_SIGN * (0.5 * heelUp - 0.3 * toeUp)));
+        footTurn.setFromAxisAngle(UP, yaw).multiply(footPitch).multiply(footQ[side]);
+        setWorldQuaternion(bones[`${side}Foot`], footTurn);
       }
 
       // Torso: bent back and round towards the spot, as far as his style has it.
       const upper = bones.Spine2.getWorldPosition(new THREE.Vector3());
       aim(bones.Spine, upper, tgt, style.lean * s.working);
       // and his chest turns a little with the stroke
-      turnWorld(bones.Spine1, new THREE.Quaternion().setFromAxisAngle(UP, 0.1 * sway));
+      // (walking, the shoulders swing against the hips)
+      turnWorld(bones.Spine1, new THREE.Quaternion().setFromAxisAngle(UP, 0.1 * sway - 0.09 * gait * Math.sin(stride)));
+      // the chest lifts and drops with the breath
+      turnWorld(bones.Spine2, new THREE.Quaternion().setFromAxisAngle(rightV, 0.018 * breath));
 
       // Gun: held at chest height a forearm's length in front of him, tipped up so the nozzle points at the spot.
       const chest = bones.Spine2.getWorldPosition(new THREE.Vector3());
@@ -708,7 +738,12 @@ export function createWorker(workerGltf, scene, styleIn = {}) {
 
       // Head: look at the spot (part of the way, a neck only bends so far).
       const eyes = bones.LeftEye.getWorldPosition(new THREE.Vector3()).add(bones.RightEye.getWorldPosition(new THREE.Vector3())).multiplyScalar(0.5);
-      aim(bones.Head, eyes, headT, style.head);
+      // (between strokes his gaze drifts: along the car and back, a little up and down)
+      const wander = 1 - s.spraying;
+      headW.copy(headT)
+        .addScaledVector(rightV, 0.35 * wander * Math.sin(clock * 0.43 + strokePhase))
+        .add(v1.set(0, 0.12 * wander * Math.sin(clock * 0.61 + 2), 0));
+      aim(bones.Head, eyes, headW, style.head);
 
       // Mist from the nozzle.
       nozzle.copy(GUN_NOZZLE).applyMatrix4(gun.matrixWorld);
