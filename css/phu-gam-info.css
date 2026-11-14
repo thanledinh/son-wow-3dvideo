@@ -15,6 +15,15 @@
 /* thanh lộ trình thay cho thanh tiến độ cũ của đoạn 3D */
 .story .progress { display: none; }
 
+/* chú thích "Cuộn xuống" trên thanh lộ trình, mất khi bắt đầu cuộn (js/phu-gam.js updateProgress) */
+.scroll-hint {
+  position: absolute; left: 0; right: 0; bottom: calc(var(--route-gap) + 78px); margin: 0; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  font-size: 12px; letter-spacing: 0.26em; text-transform: uppercase; color: #fff; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.8); pointer-events: none;
+}
+.scroll-hint svg { width: 22px; height: 22px; fill: none; stroke: var(--pg-hi); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; animation: hint-bob 1.5s ease-in-out infinite; }
+@keyframes hint-bob { 0%, 100% { transform: translateY(-3px); opacity: 0.5; } 50% { transform: translateY(4px); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .scroll-hint svg { animation: none; } }
+
 /* ---------- thanh lộ trình ---------- */
 .route {
   position: fixed; left: 50%; bottom: var(--route-gap); z-index: 20; width: min(520px, calc(100% - 24px)); padding: 6px 24px 7px;

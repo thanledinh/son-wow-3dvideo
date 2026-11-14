@@ -88,7 +88,8 @@ const WHEELS = {
 const WHEEL_RADIUS = 0.341;
 const WHEEL_MATS = ["Attitude_Black_pbr_shader59", "Attitude_Black_pbr_shader70", "Attitude_Black_pbr_shader71", "Attitude_Black_pbr_shader72"];
 const WHEELS_OFF = { LF: [0.08, 0.17], RF: [0.1, 0.19], LB: [0.15, 0.24], RB: [0.17, 0.26] };
-const WHEELS_ON = [0.89, 0.97];
+// (the wheels stay off through the end of the story and the explore view: window past the end = never put back)
+const WHEELS_ON = [2, 3];
 // Brakes are bagged once the wheels are off and unbagged before the wheels go back (scroll windows).
 const WRAP_ON = [0.27, 0.33];
 const WRAP_OFF = [0.85, 0.88];
@@ -123,6 +124,7 @@ const loaderFill = document.getElementById("loaderFill");
 const loaderPct = document.getElementById("loaderPct");
 const progressFill = document.getElementById("progressFill");
 const stage = story.querySelector(".stage");
+const scrollHint = document.getElementById("scrollHint");
 
 const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -1323,6 +1325,7 @@ let viewOverride = null;
 
 function updateProgress(p) {
   progressFill.style.transform = `scaleX(${p.toFixed(4)})`;
+  if (scrollHint) scrollHint.style.opacity = (1 - span(p, [0.004, 0.025])).toFixed(3);
 }
 
 function onScroll() {
