@@ -505,6 +505,14 @@ function wearBody(bodyGltf, root, model, bones, materials) {
       // cloth and skin share the sheet: matte, with the library's normal map doing the folds and pores
       o.material.roughness = 0.78;
       o.material.metalness = 0;
+      // hair cards (the second man's ponytail): cut out rather than blended, since the fade near the camera
+      // switches `transparent` on and off for every material
+      if (o.material.transparent) {
+        o.material.transparent = false;
+        o.material.alphaTest = 0.45;
+        o.material.side = THREE.DoubleSide;
+        o.material.roughness = 0.6;
+      }
       materials.push(o.material);
     }
   });

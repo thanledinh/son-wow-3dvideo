@@ -1539,7 +1539,8 @@ async function start() {
   const motion = { idle: idleGltf.animations[0], walk: walkGltf.animations[0] };
   // the figure that is seen, one copy each (js/phu-gam-worker.js wearBody)
   const BODY_URL = `assets/phu-gam/worker-body.glb?v=${VERSION}`;
-  const [bodyA, bodyB] = await Promise.all([gltfLoader.loadAsync(BODY_URL), gltfLoader.loadAsync(BODY_URL)]);
+  // (two different men: Rocketbox's Male_Adult_11 at the front, Male_Adult_09 at the rear)
+  const [bodyA, bodyB] = await Promise.all([gltfLoader.loadAsync(BODY_URL), gltfLoader.loadAsync(BODY_URL.replace("body.glb", "body-b.glb"))]);
   // the showroom's light (bakeEnvironment); without it the page falls back to the modelled room's own
   const hdr = await new HDRLoader().loadAsync(`assets/phu-gam/showroom.hdr?v=${VERSION}`).catch(() => null);
   if (hdr) hdr.mapping = THREE.EquirectangularReflectionMapping;
