@@ -4,6 +4,7 @@
 // so he fits under the car, and a procedural walk driven by how far he has moved. A cone of grey mist leaves
 // the nozzle while he sprays.
 import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
 const HEIGHT = 1.7; // the character is 1.86 m tall; shop staff are nearer 1.70
 const CROUCH = 0.06; // bend at the knees so the head clears the floor pan
@@ -13,7 +14,7 @@ const STRIDE = 0.55;
 // Its own axes: the nozzle points down -x, "up" is -z, the can hangs down +z.
 const GUN = {
   grip: new THREE.Vector3(1, 0, 0.55).normalize(), // the grip's run, back and down from the head
-  can: { collar: new THREE.Vector3(-0.008, 0, 0.026), axis: new THREE.Vector3(0.35, 0, 1).normalize(), length: 0.22, radius: 0.045 },
+  can: { collar: new THREE.Vector3(-0.008, 0, 0.026), axis: new THREE.Vector3(0.35, 0, 1).normalize(), radius: 0.039 },
   nozzle: 0.11,
 };
 const GUN_GRIP = new THREE.Vector3(0.02, 0, 0).addScaledVector(GUN.grip, 0.075);
@@ -124,18 +125,60 @@ function mistMaterial() {
   });
 }
 
-// GB's can: the label is the shop's own product photo (the user: change the coating to this one), unwrapped round
-// the can by a tool kept outside the repo into assets/phu-gam/can-label.webp. u runs round the can with the front
-// of the label at u = 0.5 and the same label again on the back (the user: the back like the front), v from the base
-// (0) to the shoulder (1). One texture, shared by every can in the shop.
+// GB's can, after the shop's three product photos of it (the user: front, back and side, make the bottle
+// identical). The label is those photos unwrapped off the can and joined all the way round by a tool kept outside
+// the repo, into assets/phu-gam/can-label.webp: u runs round the can with the front ("UBS R") at u = 0.5, the
+// German side to its right, the English side with the spraying table to its left, v from the base (0) to the top
+// rim (1). One texture, shared by every can in the shop.
 let label = null;
 export function canLabel() {
   if (!label) {
-    label = new THREE.TextureLoader().load("assets/phu-gam/can-label.webp?v=3");
+    label = new THREE.TextureLoader().load("assets/phu-gam/can-label.webp?v=4");
     label.colorSpace = THREE.SRGBColorSpace;
-    label.anisotropy = 4;
+    label.anisotropy = 8;
   }
   return label;
+}
+
+// The can's shape from the same photos: a 1 L tin 78 mm across and 211 mm tall (2.7 times as tall as wide, as
+// photographed), a rolled tin rim top and bottom standing a little proud of the label, a flat lid set down inside
+// the top rim, and the grey plastic screw neck in the middle of it: a flange with two lugs, a threaded tube half
+// the can's width. Standing on y = 0, the front of the label facing +z. Geometries by material: the label's
+// wrap, the bare tin, the grey plastic.
+export const CAN = { radius: 0.039, height: 0.211, neck: 0.03 };
+let canGeo = null;
+export function canParts() {
+  if (canGeo) return canGeo;
+  const { radius: R, height: H } = CAN;
+  const at = (g, y) => g.translate(0, y, 0);
+  const wrap = at(new THREE.CylinderGeometry(R, R, H - 0.011, 48, 1, true), 0.0065 + (H - 0.011) / 2).rotateY(Math.PI);
+  const ring = (r, tube, y) => at(new THREE.TorusGeometry(r, tube, 8, 40).rotateX(Math.PI / 2), y);
+  const tin = mergeGeometries([
+    at(new THREE.CylinderGeometry(R * 1.012, R * 1.012, 0.0065, 48), 0.00325),
+    ring(R * 1.012, 0.0022, 0.0022),
+    at(new THREE.CylinderGeometry(R * 1.012, R * 1.012, 0.0045, 48, 1, true), H - 0.00225),
+    ring(R * 1.012, 0.0022, H - 0.0012),
+    at(new THREE.CylinderGeometry(R * 0.985, R * 0.985, 0.002, 48), H - 0.004),
+  ]);
+  const N = 0.019; // the neck's radius
+  const lug = (sx) => new THREE.BoxGeometry(0.011, 0.006, 0.012).translate(sx * (N + 0.0085), H + 0.003, 0);
+  const neck = mergeGeometries([
+    at(new THREE.CylinderGeometry(N + 0.004, N + 0.0055, 0.005, 32), H - 0.0005),
+    lug(1),
+    lug(-1),
+    at(new THREE.CylinderGeometry(N, N, 0.027, 32, 1, true), H + 0.002 + 0.0135),
+    ...[0.012, 0.0165, 0.021, 0.0255].map((y) => ring(N + 0.0004, 0.0011, H + y)),
+    ring(N - 0.0008, 0.0012, H + 0.0285),
+  ]);
+  canGeo = { wrap, tin, neck };
+  return canGeo;
+}
+export function canMaterials() {
+  return {
+    wrap: new THREE.MeshStandardMaterial({ map: canLabel(), metalness: 0.3, roughness: 0.32 }),
+    tin: new THREE.MeshStandardMaterial({ color: 0xc4c9ce, metalness: 1, roughness: 0.28 }),
+    neck: new THREE.MeshStandardMaterial({ color: 0x69747c, metalness: 0, roughness: 0.6 }),
+  };
 }
 
 function buildGun() {
@@ -143,8 +186,7 @@ function buildGun() {
   const grey = new THREE.MeshStandardMaterial({ color: 0x55595e, metalness: 0.15, roughness: 0.55 });
   const dark = new THREE.MeshStandardMaterial({ color: 0x2a2c2f, metalness: 0.2, roughness: 0.5 });
   const pale = new THREE.MeshStandardMaterial({ color: 0xd9dcdf, metalness: 0, roughness: 0.45 });
-  const can = new THREE.MeshStandardMaterial({ map: canLabel(), metalness: 0.35, roughness: 0.3 });
-  const tin = new THREE.MeshStandardMaterial({ color: 0xc4c9ce, metalness: 1, roughness: 0.3 });
+  const { wrap: can, tin, neck: neckMat } = canMaterials();
   const Y = new THREE.Vector3(0, 1, 0);
   // a mesh placed at `at`, its own y axis turned along `axis`
   const add = (geo, mat, at, axis = Y) => {
@@ -167,13 +209,14 @@ function buildGun() {
   }
   const lever = new THREE.Vector3(0.028, 0, 0.034).addScaledVector(GUN.grip, 0.03);
   add(new THREE.BoxGeometry(0.009, 0.07, 0.02), pale, lever, GUN.grip);
-  // the can: collar, body with its label, silver base rim
-  const { collar, axis, length, radius } = GUN.can;
-  add(new THREE.CylinderGeometry(0.02, 0.024, 0.03, 20), dark, collar.clone().addScaledVector(axis, 0.012), axis);
-  add(new THREE.CylinderGeometry(0.03, radius, 0.025, 28), tin, collar.clone().addScaledVector(axis, 0.035), axis.clone().negate());
-  // (turned so the label's front faces gun +y, his left; the blue top of the label at the collar)
-  const body = add(new THREE.CylinderGeometry(radius, radius, length - 0.04, 40), can, collar.clone().addScaledVector(axis, 0.03 + length / 2), axis);  body.rotateY(Math.PI / 2);
-  add(new THREE.CylinderGeometry(radius * 0.97, radius * 0.97, 0.012, 40), tin, collar.clone().addScaledVector(axis, 0.03 + length - 0.014), axis);
+  // (the gun's own screw cap over the top of the can's neck; the can hangs from it by that neck, upside down along
+  // `axis`, turned so the label's front faces gun +y, his left)
+  const { collar, axis } = GUN.can;
+  add(new THREE.CylinderGeometry(0.0225, 0.0235, 0.018, 24), dark, collar.clone().addScaledVector(axis, 0.006), axis);
+  const parts = canParts();
+  const CAN_TURN = Math.atan2(axis.x, axis.z);
+  const hang = collar.clone().addScaledVector(axis, 0.004 + CAN.neck + CAN.height);
+  for (const [geo, mat] of [[parts.wrap, can], [parts.tin, tin], [parts.neck, neckMat]]) add(geo, mat, hang, axis.clone().negate()).rotateY(CAN_TURN);
   // the air hose's fitting at the back of the grip (the hose itself runs in world space to the air line: createWorker)
   add(new THREE.CylinderGeometry(0.008, 0.008, 0.025, 12), grey, GUN_HOSE.clone().addScaledVector(GUN.grip, -0.008), GUN.grip);
   return gun;

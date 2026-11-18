@@ -14,9 +14,17 @@
 // two underbody work lights on stands, and a creeper board. Kept out of the camera's paths and the sprayers' walks.
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { canLabel } from "./phu-gam-worker.js";
+import { canParts, canMaterials } from "./phu-gam-worker.js";
 
 const Y = new THREE.Vector3(0, 1, 0);
+
+// GB's cans standing at [x, y of the base, z, turn of the label's front from +z], as one mesh per material
+let canMats = null;
+function cansAt(spots) {
+  const parts = canParts();
+  canMats ||= canMaterials();
+  return Object.keys(parts).map((k) => mesh(spots.map(([x, y, z, turn]) => parts[k].clone().rotateY(turn).translate(x, y, z)), canMats[k]));
+}
 
 // a cylinder (or any y-axis geometry) from a to b
 function between(geo, a, b) {
@@ -193,7 +201,7 @@ export function buildShop() {
     cart.add(mesh([rod(V(-0.42, 0.75, -0.18), V(-0.42, 0.75, 0.18), 0.012), rod(V(-0.36, 0.75, -0.18), V(-0.42, 0.75, -0.18), 0.012), rod(V(-0.36, 0.75, 0.18), V(-0.42, 0.75, 0.18), 0.012)], chrome));
     cart.add(mesh([...caster(-0.3, -0.18), ...caster(0.3, -0.18), ...caster(-0.3, 0.18), ...caster(0.3, 0.18)], rubber));
     // a few tools on the top: a spray can, a roll of masking tape, a scraper
-    cart.add(mesh([new THREE.CylinderGeometry(0.03, 0.03, 0.2, 16).translate(0.2, 1.0, 0.05)], new THREE.MeshStandardMaterial({ map: canLabel(), roughness: 0.3, metalness: 0.3 })));
+    cart.add(...cansAt([[0.2, 0.9, 0.05, Math.PI]]));
     cart.add(mesh([new THREE.TorusGeometry(0.045, 0.02, 10, 24).rotateX(Math.PI / 2).translate(-0.12, 0.92, -0.05)], paint(0xc9b98f, 0.8, 0)));
     cart.add(mesh([box(0.2, 0.01, 0.06, V(0.02, 0.91, 0.1), 0.4)], grey));
     cart.position.set(-2.75, 0, 1.45);
@@ -217,10 +225,9 @@ export function buildShop() {
   // GB cans: two rows of 1 L cans on a low dolly, and an opened carton
   {
     const cans = new THREE.Group();
-    const label = new THREE.MeshStandardMaterial({ map: canLabel(), roughness: 0.3, metalness: 0.3 });
-    const geos = [];
-    for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) geos.push(new THREE.CylinderGeometry(0.045, 0.045, 0.2, 24).rotateY(-Math.PI / 2 + i * 0.4).translate(-0.15 + i * 0.1, 0.17, -0.1 + j * 0.1));
-    cans.add(mesh(geos, label));
+    const spots = [];
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) spots.push([-0.15 + i * 0.1, 0.07, -0.1 + j * 0.1, Math.PI / 2 + i * 0.4]);
+    cans.add(...cansAt(spots));
     cans.add(mesh([box(0.5, 0.03, 0.4, V(0, 0.055, 0))], paint(0x2a2c2f, 0.5, 0.3)), mesh([...caster(-0.2, -0.15, 0.05), ...caster(0.2, -0.15, 0.05), ...caster(-0.2, 0.15, 0.05), ...caster(0.2, 0.15, 0.05)], rubber));
     cans.add(mesh([box(0.42, 0.26, 0.32, V(0.48, 0.13, 0.05), 0.2)], paint(0x9b7b55, 0.9, 0)));
     cans.position.set(2.55, 0, -2.45);
