@@ -471,7 +471,101 @@ function fitClip(source, bones, walk) {
 }
 const HIPS_UP = 1.003; // the hips' standing height in the library's clips
 
-export function createWorker(workerGltf, scene, styleIn = {}, motion) {
+// The man who is seen (the user: find another one, the avatar looked dismal): a photo-textured figure from
+// Microsoft's Rocketbox library (MIT; assets/phu-gam/worker-body.glb, converted and dressed in the shop's uniform by
+// tools kept outside the repo). Its skeleton is a 3ds Max biped, not the avatar's, so the avatar stays as the
+// unseen driver: it is posed as before (recorded motion, the gun's IK) and this body copies it bone for bone, in
+// world space, every frame: each bone takes its driver's turn away from the rest pose. The two rest poses are
+// lined up first (the biped's arms hang lower than the avatar's T-pose), and since the limbs are not quite the
+// same length the hands and feet are then solved onto the driver's.
+const BIPED = {
+  Hips: "Bip01_Pelvis", Spine: "Bip01_Spine", Spine1: "Bip01_Spine1", Spine2: "Bip01_Spine2", Neck: "Bip01_Neck", Head: "Bip01_Head",
+};
+for (const [side, s] of [["Left", "L"], ["Right", "R"]]) {
+  Object.assign(BIPED, {
+    [`${side}Shoulder`]: `Bip01_${s}_Clavicle`, [`${side}Arm`]: `Bip01_${s}_UpperArm`, [`${side}ForeArm`]: `Bip01_${s}_Forearm`, [`${side}Hand`]: `Bip01_${s}_Hand`,
+    [`${side}UpLeg`]: `Bip01_${s}_Thigh`, [`${side}Leg`]: `Bip01_${s}_Calf`, [`${side}Foot`]: `Bip01_${s}_Foot`, [`${side}ToeBase`]: `Bip01_${s}_Toe0`,
+  });
+  ["Thumb", "Index", "Middle", "Ring", "Pinky"].forEach((finger, i) => {
+    ["", "1", "2"].forEach((joint, j) => (BIPED[`${side}Hand${finger}${j + 1}`] = `Bip01_${s}_Finger${i}${joint}`));
+  });
+}
+// bones whose run (to the next joint) is lined up with the driver's before the rest pose is taken
+const RUNS = [["Arm", "ForeArm"], ["ForeArm", "Hand"], ["Hand", "HandMiddle1"], ["UpLeg", "Leg"], ["Leg", "Foot"]];
+
+function wearBody(bodyGltf, root, model, bones, materials) {
+  const body = bodyGltf.scene;
+  root.add(body);
+  model.traverse((o) => o.isMesh && (o.visible = false));
+  const byName = {};
+  body.traverse((o) => {
+    byName[o.name] = o;
+    if (o.isMesh) {
+      o.frustumCulled = false;
+      // cloth and skin share the sheet: matte, with the library's normal map doing the folds and pores
+      o.material.roughness = 0.78;
+      o.material.metalness = 0;
+      materials.push(o.material);
+    }
+  });
+  const top = byName.Bip01;
+  // his size: the driver's height (taller, his head met the exhaust)
+  root.updateMatrixWorld(true);
+  const hipsAt = bones.Hips.getWorldPosition(new THREE.Vector3());
+  const tall = new THREE.Box3().setFromObject(body);
+  body.scale.setScalar(HEIGHT / (tall.max.y - tall.min.y));
+  root.updateMatrixWorld(true);
+
+  const world = (o) => o.getWorldPosition(new THREE.Vector3());
+  for (const side of ["Left", "Right"]) {
+    for (const [a, b] of RUNS) {
+      const d = bones[side + a];
+      const t = byName[BIPED[side + a]];
+      const run = world(bones[side + b]).sub(world(d)).normalize();
+      aim(t, world(byName[BIPED[side + b]]), world(t).add(run));
+    }
+  }
+  root.updateMatrixWorld(true);
+  const depth = (o) => (o.parent ? depth(o.parent) + 1 : 0);
+  const pairs = Object.entries(BIPED)
+    .filter(([d, t]) => bones[d] && byName[t])
+    .map(([d, t]) => ({
+      d: bones[d],
+      t: byName[t],
+      // (driver's world turn now) × fit = this bone's world turn
+      fit: bones[d].getWorldQuaternion(new THREE.Quaternion()).invert().multiply(byName[t].getWorldQuaternion(new THREE.Quaternion())),
+    }))
+    .sort((a, b) => depth(a.t) - depth(b.t));
+  const pair = (name) => pairs.find((p) => p.d === bones[name]);
+  // where the biped's centre sits from the driver's hips, and how much higher its ankle joint is
+  const topOff = top.getWorldPosition(new THREE.Vector3()).sub(hipsAt);
+  const ankleUp = world(byName[BIPED.LeftFoot]).y - world(bones.LeftFoot).y;
+  const limbs = [];
+  for (const side of ["Left", "Right"]) {
+    limbs.push({ chain: ["Arm", "ForeArm", "Hand"].map((n) => pair(side + n)), lift: 0 });
+    limbs.push({ chain: ["UpLeg", "Leg", "Foot"].map((n) => pair(side + n)), lift: ankleUp });
+  }
+  const q = new THREE.Quaternion();
+  const p = new THREE.Vector3();
+  const mid = new THREE.Vector3();
+  const turnOf = (pr) => pr.d.getWorldQuaternion(q).multiply(pr.fit);
+
+  return () => {
+    top.parent.worldToLocal(bones.Hips.getWorldPosition(p).add(topOff));
+    top.position.copy(p);
+    top.updateMatrixWorld(true);
+    for (const pr of pairs) setWorldQuaternion(pr.t, turnOf(pr));
+    // hands onto the driver's wrists and feet onto its ankles, bending at the elbow / knee the way it already bends
+    for (const { chain: [a, b, c], lift } of limbs) {
+      c.d.getWorldPosition(p).y += lift;
+      b.t.getWorldPosition(mid);
+      reach(a.t, b.t, c.t, p.clone(), mid.clone());
+      setWorldQuaternion(c.t, turnOf(c));
+    }
+  };
+}
+
+export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) {
   const style = { ...STYLE, ...styleIn };
   const root = new THREE.Group();
   const model = workerGltf.scene;
@@ -687,6 +781,8 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion) {
     });
   }
 
+  const wear = bodyGltf ? wearBody(bodyGltf, root, model, bones, materials) : null;
+
   const gunGrip = new THREE.Vector3();
   const nozzle = new THREE.Vector3();
   const sprayDir = new THREE.Vector3();
@@ -832,6 +928,8 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion) {
         .addScaledVector(rightV, 0.35 * wander * Math.sin(clock * 0.43 + strokePhase))
         .add(v1.set(0, 0.12 * wander * Math.sin(clock * 0.61 + 2), 0));
       aim(bones.Head, eyes, headW, style.head);
+
+      if (wear) wear();
 
       // Mist from the nozzle.
       nozzle.copy(GUN_NOZZLE).applyMatrix4(gun.matrixWorld);
