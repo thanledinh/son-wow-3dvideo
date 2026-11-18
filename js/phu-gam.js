@@ -1575,6 +1575,11 @@ async function start() {
   const underClip = [new THREE.Plane(new THREE.Vector3(0, 0, -1), UNDER_TRIM[0]), new THREE.Plane(new THREE.Vector3(0, 0, 1), -UNDER_TRIM[1])];
   under.traverse((o) => {
     if (!o.isMesh) return;
+    // (the user: the exhaust comes off for the job too) pipes, silencers and catalyst are not there
+    if (o.material.name === "UB_Exhaust" || o.material.name === "UB_ExhaustHot") {
+      o.visible = false;
+      return;
+    }
     o.material.clippingPlanes = underClip;
     // ambient occlusion baked into the model's vertex colours: the shade in its corners and under its parts
     const shaded = !!o.geometry.attributes.color;
