@@ -810,8 +810,14 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) 
         lastPos.set(NaN, 0, 0);
         return;
       }
+      // Fading near the camera is a dither (alphaHash), not a blend (the user: his clothes still ran through each
+      // other): blended, a half-faded man showed his far sleeve and the inside of his shirt through the near side.
       for (const m of materials) {
-        m.transparent = s.visible < 0.999;
+        if (!m.alphaHash) {
+          m.alphaHash = true;
+          m.transparent = false;
+          m.needsUpdate = true;
+        }
         m.opacity = s.visible;
       }
 
