@@ -859,13 +859,18 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) 
       // either walks or works, never both: at work he stays planted and reaches for the spot until it has got half
       // a metre away from him, then lets go of the trigger, lowers the gun, steps over, stops, and only then lifts
       // it again; and the trigger waits for the gun to be up.
-      moving = first ? false : moving ? far > 0.06 : far > (s.working > 0.5 ? 0.5 : 0.12);
-      const paceWant = moving ? Math.min(far / 0.4, Math.max(PACE, far / 0.9)) : 0;
+      // (the user: scrolled a little fast, he never got to work at all: the spot kept getting half a metre ahead of
+      // him, so he was always on his way.) At work he reaches a good metre before he gives up his footing, stops as
+      // soon as he is back within easy reach rather than on the exact mark, hurries the steps between, and has the
+      // gun up again in a moment.
+      const atWork = s.working > 0.5;
+      moving = first ? false : moving ? far > (atWork ? 0.3 : 0.06) : far > (atWork ? 1.1 : 0.12);
+      const paceWant = moving ? Math.min(far / 0.25, Math.max(PACE, far / (atWork ? 0.45 : 0.9))) : 0;
       pace += (paceWant - pace) * (1 - Math.exp(-s.dt / 0.12));
       if (moving && far > 1e-4) own.addScaledVector(gap, Math.min(far, pace * s.dt) / far);
       const away = moving ? THREE.MathUtils.smoothstep(far, 0.3, 0.7) : 0;
-      const here = moving ? 0 : 1 - THREE.MathUtils.smoothstep(speed, 0.05, 0.3);
-      const gunUp = THREE.MathUtils.smoothstep(workS, 0.8, 0.97);
+      const here = moving ? 0 : 1 - THREE.MathUtils.smoothstep(speed, 0.2, 0.7);
+      const gunUp = THREE.MathUtils.smoothstep(workS, 0.6, 0.9);
       s = { ...s, at: own, working: s.working * here, spraying: s.spraying * here * gunUp, yaw: away > 0 ? lerpYaw(s.yaw, Math.atan2(gap.x, gap.z), away) : s.yaw };
       // His own way of standing (style), turned in from the way he walks once he has stopped to work.
       const yawWant = s.yaw + style.yaw * s.working;
@@ -905,7 +910,7 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) 
       const crouch = THREE.MathUtils.lerp(CROUCH, style.crouch, s.working);
       const sway = Math.sin(phase - 0.5) * s.spraying;
       // getting into and out of his working pose takes a moment, not a frame
-      workS += (s.working - workS) * (1 - Math.exp(-s.dt / 0.35));
+      workS += (s.working - workS) * (1 - Math.exp(-s.dt / (s.working > workS ? 0.2 : 0.3)));
       const smoothW = THREE.MathUtils.smoothstep(workS, 0, 1);
 
       // The body is a recorded one (the user's boss: he looked plastic and fake, move him like a real man): a
