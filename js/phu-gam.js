@@ -1482,7 +1482,7 @@ async function start() {
 
   const draco = new DRACOLoader().setDecoderPath("js/vendor/draco/");
   const gltfLoader = new GLTFLoader().setDRACOLoader(draco);
-  const [data, gltf, liftGltf, workerGltf, workerGltfB, underGltf] = await Promise.all([
+  const [data, gltf, liftGltf, workerGltf, workerGltfB, underGltf, idleGltf, walkGltf] = await Promise.all([
     fetch(SCENE_URL).then((r) => {
       if (!r.ok) throw new Error(r.status);
       return r.json();
@@ -1495,7 +1495,11 @@ async function start() {
     // (a second copy for the second sprayer: a skinned model can't be shared, and the file comes from the cache)
     gltfLoader.loadAsync(WORKER_URL),
     gltfLoader.loadAsync(UNDER_URL),
+    // the sprayers' recorded motion: a standing idle and a walk (js/phu-gam-worker.js)
+    gltfLoader.loadAsync(`assets/phu-gam/worker-idle.glb?v=${VERSION}`),
+    gltfLoader.loadAsync(`assets/phu-gam/worker-walk.glb?v=${VERSION}`),
   ]);
+  const motion = { idle: idleGltf.animations[0], walk: walkGltf.animations[0] };
   frames = data.frames;
   addLights(data);
   prepareModel(gltf.scene);
@@ -1565,8 +1569,8 @@ async function start() {
     // modest stance, the gun held out in front at shoulder height rather than up by the head)
     // (air: each man's hose plugs into an air line on the nearer lift post, on the face towards his half; the
     // posts stand at x ±1.32..1.79, z ±0.25)
-    createWorker(workerGltf, scene, { crouch: 0.05, stagger: 0.12, wide: 0.03, yaw: -0.4, lean: 0.04, grip: [0.4, 0.15, 0.12], head: 0.75, air: [1.55, 0.85, 0.29] }),
-    createWorker(workerGltfB, scene, { crouch: 0.08, stagger: -0.05, wide: 0.06, yaw: 0, lean: 0.03, grip: [0.36, 0.2, 0.16], head: 0.6, air: [-1.55, 0.85, -0.29] }),
+    createWorker(workerGltf, scene, { crouch: 0.05, stagger: 0.12, wide: 0.03, yaw: -0.4, lean: 0.04, grip: [0.4, 0.15, 0.12], head: 0.75, air: [1.55, 0.85, 0.29] }, motion),
+    createWorker(workerGltfB, scene, { crouch: 0.08, stagger: -0.05, wide: 0.06, yaw: 0, lean: 0.03, grip: [0.36, 0.2, 0.16], head: 0.6, air: [-1.55, 0.85, -0.29] }, motion),
   ];
   initOrbit();
   bakeEnvironment();

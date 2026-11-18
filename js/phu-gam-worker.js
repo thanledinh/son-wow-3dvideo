@@ -224,8 +224,41 @@ const UNIFORM = { hem: 0.08, shin: [0.05, 0.034], thigh: 0.062, blue: new THREE.
 // dark studio, and from behind a man was a pair of legs.
 const CHARCOAL = `{
   float ubLum = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
-  diffuseColor.rgb += vec3(0.05, 0.052, 0.058) * (1.0 - smoothstep(0.04, 0.2, ubLum));
+  diffuseColor.rgb += vec3(0.022, 0.023, 0.027) * (1.0 - smoothstep(0.04, 0.2, ubLum));
 }`;
+
+// A small tiling height map for bumpMap: "knit" is a polo's piqué (rows of little raised cells), "pores" is skin's
+// fine uneven grain. Tiled many times over the avatar's texture sheet.
+function reliefTexture(kind) {
+  const N = 64;
+  const c = document.createElement("canvas");
+  c.width = c.height = N;
+  const g = c.getContext("2d");
+  const img = g.createImageData(N, N);
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      let h;
+      if (kind === "knit") {
+        // cells 8 px across, every other row shifted half a cell
+        const u = ((x + (Math.floor(y / 8) % 2) * 4) % 8) / 8;
+        const v = (y % 8) / 8;
+        h = Math.sin(Math.PI * u) * Math.sin(Math.PI * v) * 0.85 + rnd() * 0.15;
+      } else {
+        h = 0.5 + (rnd() - 0.5) * 0.6 + 0.2 * Math.sin((x * Math.PI) / 4) * Math.sin((y * Math.PI) / 4);
+      }
+      const b = Math.round(255 * Math.min(1, Math.max(0, h)));
+      img.data.set([b, b, b, 255], (y * N + x) * 4);
+    }
+  }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(kind === "knit" ? 70 : 60, kind === "knit" ? 70 : 60);
+  t.anisotropy = 4;
+  return t;
+}
 
 function dress(model, bones) {
   const parts = {};
@@ -236,6 +269,27 @@ function dress(model, bones) {
     for (const k of ["Outfit_Bottom", "Outfit_Top", "Headwear", "Glasses", "Body"]) if (n.includes(k)) parts[k] = o;
   });
   if (parts.Glasses) parts.Glasses.visible = false;
+  // Cloth and skin instead of smooth plastic (the user's boss: he looked like a plastic figure): the avatar's
+  // materials are plain matte colour, which under the shop's hard lights shades like a moulded toy. Cloth gets a
+  // knit's fine relief and the soft bright edge fabric has at grazing angles (sheen); skin gets its own soft edge,
+  // a little gloss and pores.
+  const knit = reliefTexture("knit");
+  const pores = reliefTexture("pores");
+  const remake = (mesh, spec) => {
+    const old = mesh.material;
+    const m = new THREE.MeshPhysicalMaterial({ map: old.map, metalness: 0, ...spec });
+    m.name = old.name;
+    mesh.material = m;
+  };
+  for (const k of ["Outfit_Top", "Outfit_Bottom"]) {
+    if (parts[k]) remake(parts[k], { roughness: 0.95, sheen: 1, sheenRoughness: 0.5, sheenColor: new THREE.Color(0.05, 0.055, 0.065), bumpMap: knit, bumpScale: 0.18 });
+  }
+  model.traverse((o) => {
+    if (o.isMesh && /Wolf3D_(Skin|Body)/.test(o.material.name)) {
+      // (tinted down to a tanned skin: at the avatar's own pale tone the under-car lights burnt his arms out white)
+      remake(o, { color: new THREE.Color(0.74, 0.6, 0.52), roughness: 0.55, sheen: 0.5, sheenRoughness: 0.4, sheenColor: new THREE.Color(0.3, 0.13, 0.08), bumpMap: pores, bumpScale: 0.08 });
+    }
+  });
   if (parts.Body) skin = parts.Body.material;
 
   // no beanie: the head has short hair painted on (blackened by uniform_worker_texture.py)
@@ -288,23 +342,27 @@ function dress(model, bones) {
   // sides, so the sleeves are where the shirt reaches far from the body's midline)
   const shirt = parts.Outfit_Top;
   if (shirt) {
+    // (the user: the clothes ran through each other and looked broken) the shirt's lower part is let out a few
+    // millimetres so the shorts' waist stays under it as he bends and steps, and the sleeve's blue is a plain cuff
+    // with white piping (the diagonal panel, cut across the sleeve's coarse mesh, read as a torn patch)
+    shirt.geometry.computeBoundingBox();
+    const box = shirt.geometry.boundingBox;
     shirt.material.onBeforeCompile = (sh) => {
       sh.uniforms.uBlue = { value: UNIFORM.blue };
       sh.uniforms.uWhite = { value: UNIFORM.white };
+      sh.uniforms.uHem = { value: box.min.y };
       sh.vertexShader = sh.vertexShader
-        .replace("#include <common>", "#include <common>\nvarying vec3 vBind;")
-        .replace("#include <begin_vertex>", "#include <begin_vertex>\nvBind = position;");
+        .replace("#include <common>", "#include <common>\nvarying vec3 vBind;\nuniform float uHem;")
+        .replace("#include <begin_vertex>", "#include <begin_vertex>\nvBind = position;\ntransformed += normalize(objectNormal) * 0.007 * (1.0 - smoothstep(uHem + 0.04, uHem + 0.22, position.y));");
       sh.fragmentShader = sh.fragmentShader
         .replace("#include <common>", "#include <common>\nvarying vec3 vBind;\nuniform vec3 uBlue;\nuniform vec3 uWhite;")
         .replace("#include <map_fragment>", `#include <map_fragment>
 ${CHARCOAL}
 {
+  // (the sleeve ends about 0.30 m out from the midline in the bind pose; the mesh's far end is the gloves)
   float r = abs(vBind.x);
-  // along the sleeve from the shoulder seam, tilted by height so the band runs on the diagonal
-  float d = r - 0.21 + (vBind.y - 1.36) * 0.55;
-  float shade = clamp(dot(diffuseColor.rgb, vec3(0.333)) / 0.04, 0.6, 1.4);
-  if (r > 0.2 && d > 0.02 && d < 0.075) diffuseColor.rgb = uBlue * shade;
-  else if (r > 0.2 && d >= 0.075 && d < 0.09) diffuseColor.rgb = uWhite * shade;
+  if (r > 0.262 && r < 0.3) diffuseColor.rgb = uBlue;
+  else if (r > 0.254 && r <= 0.262) diffuseColor.rgb = uWhite;
 }`);
     };
     shirt.material.needsUpdate = true;
@@ -375,7 +433,45 @@ function legGeometry(hip, knee, ankle, iUp, iShin) {
 // air: where his air hose plugs in (world: an air line on a lift post), or null for no hose.
 const STYLE = { crouch: CROUCH, wide: 0, stagger: 0, yaw: 0, lean: 0, grip: [0.3, 0.2, 0.22], head: 0.7, air: null };
 
-export function createWorker(workerGltf, scene, styleIn = {}) {
+// A recorded clip (its tracks named after Ready Player Me's bones) fitted to this model's bones. The skeletons are
+// the same, bone for bone, but for the hips: Sketchfab's export stands this one's armature z-up, so the hips' turn
+// and travel are taken into that space. walk: the clip walks off down +z; that run is taken out (he is moved by the
+// page) and returned as `distance`.
+const Z_UP = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+function fitClip(source, bones, walk) {
+  const tracks = [];
+  let distance = 0;
+  const q = new THREE.Quaternion();
+  for (const track of source.tracks) {
+    const dot = track.name.lastIndexOf(".");
+    const bone = bones[track.name.slice(0, dot)];
+    const prop = track.name.slice(dot + 1);
+    if (!bone) continue;
+    const hips = bone === bones.Hips;
+    const values = Float32Array.from(track.values);
+    if (prop === "quaternion") {
+      if (hips) for (let i = 0; i < values.length; i += 4) q.fromArray(values, i).premultiply(Z_UP).toArray(values, i);
+      tracks.push(new THREE.QuaternionKeyframeTrack(`${bone.name}.quaternion`, track.times, values));
+    } else if (prop === "position" && hips) {
+      const n = values.length / 3;
+      const [x0, , z0] = values;
+      const run = walk ? values[(n - 1) * 3 + 2] - z0 : 0;
+      const span = track.times[n - 1] - track.times[0] || 1;
+      distance = run;
+      for (let i = 0; i < n; i++) {
+        const x = values[i * 3] - (walk ? 0 : x0);
+        const y = values[i * 3 + 1];
+        const z = values[i * 3 + 2] - z0 - (run * (track.times[i] - track.times[0])) / span;
+        values.set([x, -z + bone.position.y, y + (bone.position.z - HIPS_UP)], i * 3);
+      }
+      tracks.push(new THREE.VectorKeyframeTrack(`${bone.name}.position`, track.times, values));
+    }
+  }
+  return { clip: new THREE.AnimationClip(source.name, -1, tracks), distance };
+}
+const HIPS_UP = 1.003; // the hips' standing height in the library's clips
+
+export function createWorker(workerGltf, scene, styleIn = {}, motion) {
   const style = { ...STYLE, ...styleIn };
   const root = new THREE.Group();
   const model = workerGltf.scene;
@@ -526,22 +622,23 @@ export function createWorker(workerGltf, scene, styleIn = {}) {
   const rightV = new THREE.Vector3();
   const lastPos = new THREE.Vector3(NaN, 0, 0);
 
-  // Where the feet stand, in the worker's own space (root is still at the origin, unturned, at load).
-  const feetRest = {
-    Left: bones.LeftFoot.getWorldPosition(new THREE.Vector3()),
-    Right: bones.RightFoot.getWorldPosition(new THREE.Vector3()),
+  // The recorded motion (assets/phu-gam/worker-idle.glb, worker-walk.glb: Ready Player Me's animation library, the
+  // same skeleton as this avatar, so the tracks go straight onto its bones), played by hand: update() sets each
+  // clip's time and weight. `travel`: the ground one pass of the walk clip covers, at his height.
+  const mixer = new THREE.AnimationMixer(model);
+  const acts = {};
+  let travel = 1;
+  for (const key of ["idle", "walk"]) {
+    const { clip, distance } = fitClip(motion[key], bones, key === "walk");
+    if (key === "walk") travel = distance * model.scale.x;
+    acts[key] = mixer.clipAction(clip);
+    acts[key].play();
+  }
+  // what the recorded pose has each foot and knee doing this frame (world)
+  const legs = {
+    Left: { foot: new THREE.Vector3(), knee: new THREE.Vector3(), turn: new THREE.Quaternion() },
+    Right: { foot: new THREE.Vector3(), knee: new THREE.Vector3(), turn: new THREE.Quaternion() },
   };
-
-  // The feet's rest turn (in the worker's unturned space): each foot is put back to it, flat on the floor, after its leg
-  // is solved (left to the leg it tilted with the shin as the foot lifted, and the sole never stayed on the floor).
-  const footQ = {
-    Left: bones.LeftFoot.getWorldQuaternion(new THREE.Quaternion()),
-    Right: bones.RightFoot.getWorldQuaternion(new THREE.Quaternion()),
-  };
-  const footTurn = new THREE.Quaternion();
-  const footPitch = new THREE.Quaternion();
-  const PITCH_AXIS = new THREE.Vector3(1, 0, 0);
-  const PITCH_SIGN = 1; // + lifts the heel (toe down); flip if the foot tips the wrong way
 
   // Each hand's own frame, read from the rest pose: F wrist to middle knuckle, P out of the palm.
   // Then `fit`, the turn from the gun's frame to the hand's, and `offset`, the held point seen from the wrist.
@@ -649,60 +746,51 @@ export function createWorker(workerGltf, scene, styleIn = {}) {
       lastPos.copy(s.at);
       const gait = THREE.MathUtils.clamp(speed / 0.35, 0, 1);
       const crouch = THREE.MathUtils.lerp(CROUCH, style.crouch, s.working);
-      const stride = (walked / STRIDE) * Math.PI * 2;
       const sway = Math.sin(phase - 0.5) * s.spraying;
-      const dip = -0.022 * gait * Math.abs(Math.sin(stride)) + 0.004 * Math.sin(clock * 1.7);
 
-      // the feet are planted from the ground under him, the body rides above them
+      // The body is a recorded one (the user's boss: he looked plastic and fake, move him like a real man): a
+      // motion-captured standing idle (breath, weight shifting from leg to leg) blended into a captured walk by how
+      // fast he goes, the walk's cycle driven by the distance covered so the feet don't slide. Posed first standing
+      // on the floor where he is; what the capture has the feet and knees doing is kept...
       ground.position.set(s.at.x, 0, s.at.z);
       ground.rotation.y = yaw;
       ground.updateMatrixWorld(true);
       root.rotation.order = "YXZ";
-      // Idle life that never stops (the user: he looks stiff): weight drifts from one leg to the other, the hips swing
-      // a little as he walks, the chest rises with each breath, the head wanders off the spot now and then.
-      const shift = Math.sin(clock * 0.7 + strokePhase) * (1 - 0.6 * gait);
-      const breath = Math.sin(clock * 2.1 + strokePhase);
-      root.position.set(
-        s.at.x + rightV.x * (0.025 * sway + 0.012 * shift),
-        -crouch + dip + 0.004 * breath,
-        s.at.z + rightV.z * (0.025 * sway + 0.012 * shift),
-      );
-      root.rotation.set(0.01 * Math.sin(clock * 0.9 + 1), yaw + 0.06 * sway + 0.07 * gait * Math.sin(stride) + 0.025 * shift, 0.035 * gait * Math.sin(stride) + 0.02 * shift);
+      root.position.set(s.at.x, 0, s.at.z);
+      root.rotation.set(0, yaw, 0);
       for (const [b, q] of rest) b.quaternion.copy(q);
+      acts.idle.time = (clock + strokePhase * 3) % acts.idle.getClip().duration;
+      acts.walk.time = ((((walked / travel) % 1) + 1) % 1) * acts.walk.getClip().duration;
+      acts.idle.setEffectiveWeight(1 - gait);
+      acts.walk.setEffectiveWeight(gait);
+      mixer.update(0);
       root.updateMatrixWorld(true);
-
-      // Legs: feet planted on the floor (his stance: how wide, and one foot ahead), stepping as he goes.
-      for (const [side, phase, sign] of [["Left", 0, 1], ["Right", 0.5, -1]]) {
-        const u = (((walked / STRIDE + phase) % 1) + 1) % 1;
-        const stance = u < 0.5;
-        const z = (stance ? 0.5 - 2 * u : -0.5 + (2 * u - 1)) * STRIDE * gait;
-        const lift = stance ? 0 : Math.sin(Math.PI * (2 * u - 1)) * 0.07 * gait;
-        const plant = 1 - gait;
-        const wide = sign * style.wide * plant;
-        const ahead = (side === "Left" ? style.stagger : -style.stagger) * plant;
-        const foot = ground.localToWorld(feetRest[side].clone().add(new THREE.Vector3(wide, lift, z + ahead)));
-        // knees bend forward and a little out over the toes (straight forward, a wide stance knocked them in)
-        const knee = bones[`${side}UpLeg`].getWorldPosition(new THREE.Vector3())
-          .add(new THREE.Vector3(Math.sin(yaw), -0.2, Math.cos(yaw)).multiplyScalar(0.6))
-          .add(new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw)).multiplyScalar(0.12 * sign));
+      for (const side of ["Left", "Right"]) {
+        const leg = legs[side];
+        bones[`${side}Foot`].getWorldPosition(leg.foot);
+        bones[`${side}Foot`].getWorldQuaternion(leg.turn);
+        bones[`${side}Leg`].getWorldPosition(leg.knee);
+      }
+      // ...then he sinks into his crouch and sways with the stroke, and the legs are solved back onto those feet
+      // (his own stance at work on top: how wide, and one foot ahead).
+      root.position.set(s.at.x + rightV.x * 0.025 * sway, -crouch, s.at.z + rightV.z * 0.025 * sway);
+      root.rotation.set(0, yaw + 0.06 * sway, 0);
+      root.updateMatrixWorld(true);
+      const plant = (1 - gait) * s.working;
+      for (const [side, sign] of [["Left", 1], ["Right", -1]]) {
+        const leg = legs[side];
+        const foot = leg.foot.addScaledVector(rightV, -sign * style.wide * plant).addScaledVector(fwdV, sign * style.stagger * plant);
+        // knees bend forward and a little out over the toes
+        const knee = leg.knee.addScaledVector(fwdV, 0.5).addScaledVector(rightV, -0.1 * sign);
         reach(bones[`${side}UpLeg`], bones[`${side}Leg`], bones[`${side}Foot`], foot, knee);
-        // the sole stays level with the floor; stepping, the heel lifts as the foot leaves (toe-off), the toe rises as
-        // it swings forward and lands heel first
-        const heelUp = stance ? THREE.MathUtils.clamp((u - 0.3) / 0.2, 0, 1) : 0; // late in the stance
-        const toeUp = stance ? 0 : Math.sin(Math.PI * (2 * u - 1)); // in the swing
-        footPitch.setFromAxisAngle(PITCH_AXIS, gait * (PITCH_SIGN * (0.5 * heelUp - 0.3 * toeUp)));
-        footTurn.setFromAxisAngle(UP, yaw).multiply(footPitch).multiply(footQ[side]);
-        setWorldQuaternion(bones[`${side}Foot`], footTurn);
+        setWorldQuaternion(bones[`${side}Foot`], leg.turn);
       }
 
       // Torso: bent back and round towards the spot, as far as his style has it.
       const upper = bones.Spine2.getWorldPosition(new THREE.Vector3());
       aim(bones.Spine, upper, tgt, style.lean * s.working);
       // and his chest turns a little with the stroke
-      // (walking, the shoulders swing against the hips)
-      turnWorld(bones.Spine1, new THREE.Quaternion().setFromAxisAngle(UP, 0.1 * sway - 0.09 * gait * Math.sin(stride)));
-      // the chest lifts and drops with the breath
-      turnWorld(bones.Spine2, new THREE.Quaternion().setFromAxisAngle(rightV, 0.018 * breath));
+      turnWorld(bones.Spine1, new THREE.Quaternion().setFromAxisAngle(UP, 0.1 * sway));
 
       // Gun: held at chest height a forearm's length in front of him, tipped up so the nozzle points at the spot.
       const chest = bones.Spine2.getWorldPosition(new THREE.Vector3());
