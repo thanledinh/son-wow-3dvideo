@@ -8,7 +8,7 @@ import { createWorker } from "./phu-gam-worker.js";
 import { buildShop } from "./phu-gam-props.js";
 
 // Bump when the model or scene data change: assets/ is cached for 7 days by nginx.
-const VERSION = "7";
+const VERSION = "8";
 const MODEL_URL = `assets/phu-gam/innova-gam.glb?v=${VERSION}`;
 const LIFT_URL = `assets/phu-gam/lift.glb?v=${VERSION}`;
 const UNDER_URL = `assets/phu-gam/underbody.glb?v=${VERSION}`;

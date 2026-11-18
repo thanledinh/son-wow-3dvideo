@@ -7,7 +7,7 @@ from mathutils.bvhtree import BVHTree
 
 argv = sys.argv
 OUT = argv[argv.index('--') + 1] if '--' in argv else 'underbody.glb'
-SPARE = True        # spare wheel hangs under the boot floor (unconfirmed for this car, see report)
+SPARE = False       # the spare wheel under the boot floor: lowered off for the coating job (the user: take it off too)
 
 for o in list(bpy.data.objects): bpy.data.objects.remove(o, do_unlink=True)
 for me in list(bpy.data.meshes): bpy.data.meshes.remove(me)
