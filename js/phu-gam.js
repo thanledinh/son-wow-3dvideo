@@ -414,7 +414,9 @@ const STUDIO = {
   bg: 0x3a3d42,
   fog: [14, 40],
   hide: new Set(["Garage_Roof", "Garage_Shutter", "Garage_Truss"]),
-  walls: { Garage_Wall_Blue: 0.42, Garage_Wall_Grey: 0.5, Garage_Trim_White: 0.7 },
+  // (the user: make the showroom look real) a showroom's two tones: pale walls over a graphite dado, the trim
+  // between them a thin line of the brand's cyan
+  walls: { Garage_Wall_Blue: [0.46, 0.47, 0.48], Garage_Wall_Grey: [0.085, 0.09, 0.1], Garage_Trim_White: [0.1, 0.5, 0.62] },
   floor: { tile: 0.07, line: 0.16 },
   bars: { at: [[4.1, 3.3], [-4.1, 3.3], [4.1, -3.3], [-4.1, -3.3]], bottom: 0.25, height: 2.7, width: 0.09, glow: 6 },
 };
@@ -448,6 +450,114 @@ function graphite(m) {
   };
 }
 
+// A floor that has been worked on (the user: a real showroom's floor): a scanned concrete floor's wear (Poly Haven's
+// "Concrete Floor Worn 001", CC0; its roughness map, assets/phu-gam/floor-wear.webp) laid over the epoxy in world
+// space at two sizes, a 3 m repeat for scuffs and scratches and a 14 m one for the big uneven patches. Where it is
+// worn the epoxy is duller and a shade darker, so the room's lights smear across it unevenly instead of lying on a
+// perfect sheet.
+const floorWear = new THREE.TextureLoader().load("assets/phu-gam/floor-wear.webp?v=1");
+floorWear.wrapS = floorWear.wrapT = THREE.RepeatWrapping;
+floorWear.anisotropy = 4;
+function wornFloor(m) {
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uWear = { value: floorWear };
+    sh.vertexShader = sh.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec2 vFloor;")
+      .replace("#include <project_vertex>", "#include <project_vertex>\nvFloor = (modelMatrix * vec4(transformed, 1.0)).xz;");
+    sh.fragmentShader = sh.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying vec2 vFloor;\nuniform sampler2D uWear;")
+      .replace("#include <map_fragment>", `#include <map_fragment>
+  float wearFine = texture2D(uWear, vFloor * 0.31).r;
+  float wear = wearFine * 0.6 + texture2D(uWear, vFloor * 0.07 + 0.37).r * 0.4;
+  diffuseColor.rgb *= mix(1.12, 0.8, smoothstep(0.4, 0.75, wear));`)
+      .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>
+  roughnessFactor = clamp(roughnessFactor * mix(0.5, 2.2, smoothstep(0.38, 0.72, wear)), 0.07, 1.0);`);
+  };
+}
+
+// Contact shadows (nothing in the scene casts a real one): a soft dark patch on the floor under whatever stands on
+// it, so things sit on the floor instead of hovering over it. One blurred blob texture, stretched to each footprint.
+const blobs = { car: null, wheels: {}, men: [] };
+let blobMap = null;
+function addBlob(x, z, w, d, strength) {
+  if (!blobMap) {
+    const c = document.createElement("canvas");
+    c.width = c.height = 128;
+    const g = c.getContext("2d");
+    const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    grad.addColorStop(0, "rgba(0,0,0,1)");
+    grad.addColorStop(0.45, "rgba(0,0,0,0.72)");
+    grad.addColorStop(0.8, "rgba(0,0,0,0.18)");
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 128, 128);
+    blobMap = new THREE.CanvasTexture(c);
+  }
+  const mat = new THREE.MeshBasicMaterial({ map: blobMap, transparent: true, depthWrite: false, opacity: strength, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const blob = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), mat);
+  blob.position.set(x, 0.004, z);
+  blob.scale.set(w, 1, d);
+  blob.renderOrder = -1;
+  scene.add(blob);
+  return blob;
+}
+function addContactShadows(props) {
+  const box = new THREE.Box3();
+  const size = new THREE.Vector3();
+  const mid = new THREE.Vector3();
+  // the shop's furniture: whatever reaches down to the floor
+  for (const o of props.children) {
+    box.setFromObject(o);
+    if (box.isEmpty() || box.min.y > 0.3) continue;
+    box.getSize(size);
+    box.getCenter(mid);
+    addBlob(mid.x, mid.z, size.x * 1.45 + 0.2, size.z * 1.45 + 0.2, 0.55);
+  }
+  for (const [x, z] of STUDIO.bars.at) addBlob(x, z, 0.75, 0.75, 0.55);
+  for (const x of [-1.55, 1.55]) addBlob(x, 0, 1.0, 1.25, 0.6); // the lift's posts
+  blobs.car = addBlob(0, 0, 2.7, 5.8, 0.4);
+  for (const key of Object.keys(WHEELS)) blobs.wheels[key] = addBlob(0, 0, 1.0, 1.0, 0);
+  blobs.men = sprayers.map(() => addBlob(0, 0, 0.75, 0.6, 0));
+}
+// Each frame: the car's shadow tightens and darkens as it comes down; the wheels' and the men's follow them.
+function updateContactShadows() {
+  if (!blobs.car) return;
+  const down = clamp(fx.drop.value / CAR_DROP, 0, 1);
+  blobs.car.material.opacity = lerp(0.34, 0.8, down);
+  blobs.car.scale.set(lerp(2.9, 2.2, down), 1, lerp(6.0, 5.0, down));
+  for (const [key, w] of Object.entries(wheels)) {
+    const b = blobs.wheels[key];
+    b.position.set(w.group.position.x, 0.004, w.group.position.z);
+    b.material.opacity = 0.6 * clamp(1 - (w.group.position.y - WHEEL_FLAT) / 0.6, 0, 1);
+    b.visible = b.material.opacity > 0.01;
+  }
+  sprayers.forEach((s, i) => {
+    const b = blobs.men[i];
+    b.visible = s.root.visible;
+    b.position.set(s.root.position.x, 0.004, s.root.position.z);
+    b.rotation.y = s.root.rotation.y;
+    b.material.opacity = 0.5;
+  });
+}
+
+// What closes the room in: a dark ceiling over the hex lights (there was only the void), and GB's sign, lit, on the
+// wall behind the car.
+function finishRoom() {
+  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(14, 16).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x0c0d0f, roughness: 0.9, metalness: 0 }));
+  ceiling.position.y = 5.2;
+  scene.add(ceiling);
+  const logo = new THREE.TextureLoader().load("assets/phu-gam/gb-logo.webp");
+  logo.colorSpace = THREE.SRGBColorSpace;
+  logo.anisotropy = 4;
+  const W = 3.4;
+  const H = (W * 116) / 236;
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.5, H + 0.4), new THREE.MeshStandardMaterial({ color: 0x08090a, roughness: 0.35, metalness: 0.2 }));
+  back.position.set(0, 3.25, -7.93);
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ map: logo, transparent: true, toneMapped: false }));
+  sign.position.set(0, 3.25, -7.92);
+  scene.add(back, sign);
+}
+
 function prepareModel(root) {
   const dropped = [];
   root.traverse((o) => {
@@ -477,11 +587,13 @@ function prepareModel(root) {
       m.metalness = 0;
       m.roughnessMap = m.metalnessMap = null;
       if (m.normalMap) m.normalScale.multiplyScalar(0.4);
+      wornFloor(m);
     }
     if (STUDIO.walls[m.name]) {
       m.map = null;
-      m.color.setScalar(STUDIO.walls[m.name]);
-      m.roughness = 0.85;
+      m.color.setRGB(...STUDIO.walls[m.name]);
+      if (m.name === "Garage_Trim_White") m.emissive.setRGB(...STUDIO.walls[m.name]).multiplyScalar(0.5);
+      m.roughness = m.name === "Garage_Wall_Grey" ? 0.55 : 0.85;
       m.metalness = 0;
       m.roughnessMap = m.metalnessMap = null;
     }
@@ -1486,6 +1598,7 @@ function frame(now) {
   glowB.position.copy(pose.glowB);
   glowB.intensity = glow.intensity;
   updateSprayer(current, e, dt);
+  updateContactShadows();
 
   renderer.render(scene, camera);
 
@@ -1621,6 +1734,8 @@ async function start() {
     createWorker(workerGltf, scene, { crouch: 0.05, stagger: 0.12, wide: 0.03, yaw: -0.4, lean: 0.04, grip: [0.4, 0.15, 0.12], head: 0.75, air: [1.55, 0.85, 0.29] }, motion, bodyA),
     createWorker(workerGltfB, scene, { crouch: 0.08, stagger: -0.05, wide: 0.06, yaw: 0, lean: 0.03, grip: [0.36, 0.2, 0.16], head: 0.6, air: [-1.55, 0.85, -0.29] }, motion, bodyB),
   ];
+  addContactShadows(shop.group);
+  finishRoom();
   initOrbit();
   bakeEnvironment(hdr);
   applyIntro(intro.t);

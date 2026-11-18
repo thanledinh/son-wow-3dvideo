@@ -17,6 +17,18 @@
   background: radial-gradient(ellipse 75% 70% at 50% 50%, transparent 45%, rgba(0, 0, 0, 0.55) 100%);
 }
 
+/* a film's finish over the 3D (the user: like a film): a touch more contrast and colour, and a fine still grain */
+.gam-canvas { filter: contrast(1.06) saturate(1.08); }
+.gam-grain {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.09;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 0 0 0 1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
 main { position: relative; z-index: 1; }
 
 /* ---------- Câu chuyện cuộn ---------- */
