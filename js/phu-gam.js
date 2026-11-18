@@ -49,8 +49,10 @@ const SPRAYER = { enter: [0.36, 0.42], spray: [0.42, 0.88], exit: [0.88, 0.93], 
 // Blender light watts -> three.js intensities (area: W / (area·π), point: W / 4π), times a gain per light.
 // Gains are set by eye against GB's renders: without the file's shadows and bounce the big ceiling lights
 // wash the garage out, while the floor light under the car is what draws the highlights on the coat.
-const LIGHT_GAIN = { Ceiling_Fill: 0.42, Top_Softbox: 0.4, Fill_Cool: 0.42, Key_Under: 0 /* the user: no lamp shining up under the car */, Spray_Glow: 0 /* the user: no light coming on where they spray */ };
+const LIGHT_GAIN = { Ceiling_Fill: 0.42, Top_Softbox: 0.4, Fill_Cool: 0.42, Key_Under: 1 /* steady under-car fill: off, the black coat had nothing to catch and went dark; what the user minded was the glow that came on with the spray (Spray_Glow) */, Spray_Glow: 0 /* the user: no light coming on where they spray */ };
 const ENV_INTENSITY = 0.9;
+const FLOOR_BOUNCE = 0.8;
+const UNDER_FILL = { z: [-1.7, 0, 1.7], y: 0.5, cd: 2.6 };
 // Opening, played once on load (seconds): the garage is dark, the car's lamps come on, the ceiling LEDs strike
 // row by row from the far wall towards the camera, then the lift raises the car, watched head-on, into the
 // story's first shot. Scrolling during it fast-forwards it.
@@ -291,7 +293,7 @@ ${NOISE_GLSL}`)
 #else
   vec3 steel = mix(vec3(gbLum), tex, 0.55) * 0.8;
 #endif
-  vec3 coat = vec3(mix(0.004, 0.018, gbLum));
+  vec3 coat = vec3(mix(0.009, 0.03, gbLum));
   // (the colour comes on faster than the gloss: one coat already covers the steel dark, the third adds the shine)
   diffuseColor.rgb = mix(steel, coat, 1.0 - pow(1.0 - gbK, 4.0));
 }`)
@@ -310,9 +312,10 @@ material.specularColor *= mix(1.0, 0.5, gbK);
       // it black with sharp highlights, so the coat keeps its lamp highlights but less of the room.
       .replace("#include <lights_fragment_maps>", `#include <lights_fragment_maps>
 #if defined( RE_IndirectSpecular )
-  radiance *= mix(1.0, 0.4, gbC);
+  // (0.4 while lamps under the car lit it; with those off, the room's reflection is what shows the coat's gloss)
+  radiance *= mix(1.0, 0.85, gbC);
   #ifdef USE_CLEARCOAT
-    clearcoatRadiance *= mix(1.0, 0.4, gbC);
+    clearcoatRadiance *= mix(1.0, 0.85, gbC);
   #endif
 #endif
 ${opts.deep ? `// the wells and liners sit deep under the car, where the studio's bright floor and light bars (all over the
@@ -364,6 +367,19 @@ function addLights(data) {
   scene.background = bgColor.clone();
   scene.fog = new THREE.Fog(STUDIO.bg, ...STUDIO.fog);
   addLightBars();
+  // Light off the pale floor onto whatever faces down (the user: with the under-car lamps off the underbody went
+  // dark): even, from everywhere below, no lamp and no hot spot. Comes up with the room's lights in the opening.
+  const bounce = new THREE.HemisphereLight(0x000000, 0xe6e9ee, FLOOR_BOUNCE);
+  scene.add(bounce);
+  roomLights.push({ light: bounce, base: bounce.intensity });
+  // and a steady row of soft lights low under the car, nose to tail, always on: the black coat needs something to
+  // catch, but nothing that comes on with the spray or follows it
+  for (const z of UNDER_FILL.z) {
+    const fill = new THREE.PointLight(0xf4f6fa, UNDER_FILL.cd, 0, 2);
+    fill.position.set(0, UNDER_FILL.y, z);
+    scene.add(fill);
+    roomLights.push({ light: fill, base: fill.intensity });
+  }
   for (const L of data.lights) {
     const color = new THREE.Color().setRGB(...L.color);
     const dir = new THREE.Vector3().fromArray(L.dir);
