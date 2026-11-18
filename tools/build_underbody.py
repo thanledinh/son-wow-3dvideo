@@ -471,6 +471,13 @@ tube('UB_Rubber', [(-0.33, 1.28, 1.68), (-0.25, 1.30, 1.72), (-0.12, 1.40, 1.80)
 tube('UB_Rubber', [(-0.47, 1.05, 1.70), (-0.52, 0.95, 1.69)], 0.007, seg=8)
 
 # ------------------------------------------------------------ exhaust -------
+# EXHAUST = False: the car as it stands for the coating job, the whole exhaust taken off with everything that
+# holds and shields it (pipes, converter, silencers, O2 sensors and their wires, flange bolts, band clamps,
+# hangers, heat shields and their bolts). The section still runs for its measurements; nothing in it is built.
+EXHAUST = False
+if not EXHAUST:
+    _built = (cyl, box, tube, hf, bolt)
+    cyl = box = tube = hf = bolt = lambda *a, **k: None
 ZP = 1.655; MX = 0.41
 def ring(m, y, x, z, r, w=0.008, seg=22): cyl(m, (x, y - w / 2, z), (x, y + w / 2, z), r, seg=seg)
 tube('UB_ExhaustHot', [(-0.30, -1.62, 1.745), (-0.22, -1.45, 1.725), (-0.10, -1.30, 1.69), (0, -1.21, ZP)], 0.032, seg=14, sub=5)
@@ -538,6 +545,8 @@ shield(-0.14, 0.14, -0.58, 0.22, 1.732)
 shield(0.32, 0.49, 1.60, 2.22, 1.848)
 for (x, y) in ((-0.1, -0.99), (0.1, -0.99), (-0.1, -0.62), (0.1, -0.62), (-0.12, 0.2), (0.12, 0.2), (-0.12, -0.55), (0.12, -0.55)):
     bolt(x, y, 1.728 - 0.001, 0.008, wash=True)
+if not EXHAUST:
+    cyl, box, tube, hf, bolt = _built
 
 # ------------------------------------------------------------ rear axle -----
 beam_sc = lambda t: (1.0, 1.0) if (0.18 < t < 0.82) else (0.78 + 0.22 * sm(0.0, 0.18, min(t, 1 - t)), 0.78 + 0.22 * sm(0.0, 0.18, min(t, 1 - t)))
