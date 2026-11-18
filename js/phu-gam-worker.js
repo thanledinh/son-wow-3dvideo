@@ -712,8 +712,14 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) 
   let walked = 0;
   let speed = 0;
   let pace = 0;
+  let workS = 0;
+  const STANCE = 0.075; // m each foot goes out from where the recording has it
+  const toeOut = new THREE.Quaternion();
+  const hipsRest = bones.Hips.position.clone();
   const own = new THREE.Vector3();
-  const PACE = 1.25; // m/s, an unhurried walk across a shop floor
+  const PACE = 1.1; // m/s, an unhurried walk across a shop floor
+  const STEP = 0.6; // how much of the recorded stride he takes
+  const CARRY = [0.24, 0.16, -0.3]; // the gun on the way there: low in front of his hip (forward, right, up from the chest)
   const lerpYaw = (a, b, t) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * t;
   let clock = 0;
   let yawS = 0;
@@ -870,14 +876,21 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) 
       // the feet still don't slide. (Turning on the spot no longer plays the walk: full strides in place.)
       if (!first) {
         const step = v1.copy(s.at).sub(lastPos);
-        const along = step.x * Math.sin(yaw) + step.z * Math.cos(yaw);
         speed += (step.length() / Math.max(s.dt, 1e-3) - speed) * (1 - Math.exp(-s.dt / 0.15));
-        walked += along / Math.max(THREE.MathUtils.clamp(speed / PACE, 0, 1), 0.35);
+      }
+      // (the recording is a brisk walk with a long stride: at full weight, carrying the gun across a shop floor, he
+      // lunged; STEP of it, blended with standing, is an easy working pace)
+      const gait = STEP * THREE.MathUtils.smoothstep(speed / PACE, 0.04, 0.8);
+      if (!first) {
+        const step = v1.copy(s.at).sub(lastPos);
+        walked += (step.x * Math.sin(yaw) + step.z * Math.cos(yaw)) / Math.max(gait, 0.2);
       }
       lastPos.copy(s.at);
-      const gait = THREE.MathUtils.smoothstep(speed / PACE, 0.04, 1);
       const crouch = THREE.MathUtils.lerp(CROUCH, style.crouch, s.working);
       const sway = Math.sin(phase - 0.5) * s.spraying;
+      // getting into and out of his working pose takes a moment, not a frame
+      workS += (s.working - workS) * (1 - Math.exp(-s.dt / 0.35));
+      const smoothW = THREE.MathUtils.smoothstep(workS, 0, 1);
 
       // The body is a recorded one (the user's boss: he looked plastic and fake, move him like a real man): a
       // motion-captured standing idle (breath, weight shifting from leg to leg) blended into a captured walk by how
@@ -895,6 +908,12 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) 
       acts.idle.setEffectiveWeight(1 - gait);
       acts.walk.setEffectiveWeight(gait);
       mixer.update(0);
+      // (the user: he stood limp, swishy) the recorded idle rests its weight on one hip; standing at work he is
+      // squarer: most of that hip tilt and shift is taken back out, and the feet go apart (below)
+      const square = 0.65 * (1 - gait / STEP);
+      bones.Hips.quaternion.slerp(rest.get(bones.Hips), square);
+      bones.Hips.position.x += (hipsRest.x - bones.Hips.position.x) * square;
+      bones.Spine.quaternion.slerp(rest.get(bones.Spine), square * 0.6);
       root.updateMatrixWorld(true);
       for (const side of ["Left", "Right"]) {
         const leg = legs[side];
@@ -904,13 +923,17 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) 
       }
       // ...then he sinks into his crouch and sways with the stroke, and the legs are solved back onto those feet
       // (his own stance at work on top: how wide, and one foot ahead).
-      root.position.set(s.at.x + rightV.x * 0.025 * sway, -crouch, s.at.z + rightV.z * 0.025 * sway);
-      root.rotation.set(0, yaw + 0.06 * sway, 0);
+      // (the user: he looked limp and swishy) the stroke is in his arms; his hips and trunk only just give with it
+      root.position.set(s.at.x + rightV.x * 0.008 * sway, -crouch, s.at.z + rightV.z * 0.008 * sway);
+      root.rotation.set(0, yaw + 0.02 * sway, 0);
       root.updateMatrixWorld(true);
       const plant = (1 - gait) * s.working;
       for (const [side, sign] of [["Left", 1], ["Right", -1]]) {
         const leg = legs[side];
-        const foot = leg.foot.addScaledVector(rightV, -sign * style.wide * plant).addScaledVector(fwdV, sign * style.stagger * plant);
+        // (a working man's stance: feet a shoulder's width apart whenever he is standing, toes a little out)
+        const apart = STANCE * (1 - gait / STEP) + style.wide * plant;
+        const foot = leg.foot.addScaledVector(rightV, -sign * apart).addScaledVector(fwdV, sign * style.stagger * plant);
+        leg.turn.premultiply(toeOut.setFromAxisAngle(UP, sign * 0.14 * (1 - gait / STEP)));
         // knees bend forward and a little out over the toes
         const knee = leg.knee.addScaledVector(fwdV, 0.5).addScaledVector(rightV, -0.1 * sign);
         reach(bones[`${side}UpLeg`], bones[`${side}Leg`], bones[`${side}Foot`], foot, knee);
@@ -921,7 +944,7 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) 
       const upper = bones.Spine2.getWorldPosition(new THREE.Vector3());
       aim(bones.Spine, upper, tgt, style.lean * s.working);
       // and his chest turns a little with the stroke
-      turnWorld(bones.Spine1, new THREE.Quaternion().setFromAxisAngle(UP, 0.1 * sway));
+      turnWorld(bones.Spine1, new THREE.Quaternion().setFromAxisAngle(UP, 0.04 * sway));
 
       // Gun: held at chest height a forearm's length in front of him, tipped up so the nozzle points at the spot.
       const chest = bones.Spine2.getWorldPosition(new THREE.Vector3());
@@ -930,7 +953,8 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) 
       // raised up by his face and off to his right, the nozzle a hand's breadth under the floor pan, as the shop's
       // photos show (held at the chest it sprayed a long plume up through the air); how far out, across and up is
       // his own habit (style.grip)
-      const [gF, gR, gU] = style.grip;
+      // (carried low until he is at work: walking in with it held out at arm's length looked like a pose)
+      const [gF, gR, gU] = style.grip.map((v, i) => THREE.MathUtils.lerp(CARRY[i], v, smoothW));
       gunGrip.copy(chest).addScaledVector(forward, gF).addScaledVector(right, gR).add(v1.set(0, gU, 0));
       sprayDir.copy(tgt).sub(gunGrip).normalize();
       // gun axes: -x along the spray, -z towards "up" for the gun: with the nozzle tipped up at the floor pan,
@@ -960,13 +984,13 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) 
       // (between strokes his gaze drifts: along the car and back, a little up and down)
       const wander = 1 - s.spraying;
       headW.copy(headT)
-        .addScaledVector(rightV, 0.35 * wander * Math.sin(clock * 0.43 + strokePhase))
-        .add(v1.set(0, 0.12 * wander * Math.sin(clock * 0.61 + 2), 0));
+        .addScaledVector(rightV, 0.1 * wander * Math.sin(clock * 0.43 + strokePhase))
+        .add(v1.set(0, 0.03 * wander * Math.sin(clock * 0.61 + 2), 0));
       // (never further than a neck turns: walking in with the spot off to one side, his head lolled onto his
       // shoulder; and on the way there he mostly looks where he is going)
       const neck = bones.Head.getWorldPosition(v3);
       const off = v2.copy(eyes).sub(neck).angleTo(v1.copy(headW).sub(neck));
-      aim(bones.Head, eyes, headW, style.head * Math.min(1, 0.55 / Math.max(off, 1e-3)) * (0.25 + 0.75 * s.working));
+      aim(bones.Head, eyes, headW, style.head * Math.min(1, THREE.MathUtils.lerp(0.45, 0.95, smoothW) / Math.max(off, 1e-3)) * (0.25 + 0.75 * smoothW));
 
       if (wear) wear();
 
