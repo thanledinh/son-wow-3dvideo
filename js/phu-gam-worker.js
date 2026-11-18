@@ -709,6 +709,7 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) 
   let speed = 0;
   let pace = 0;
   let workS = 0;
+  let moving = false;
   const STANCE = 0.075; // m each foot goes out from where the recording has it
   const toeOut = new THREE.Quaternion();
   const hipsRest = bones.Hips.position.clone();
@@ -854,12 +855,18 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) 
       const far = gap.length();
       // (the user: by the time he had walked in, the page had been scrolled past) however far behind, he is there in
       // about a second: an easy pace for a step or two, a brisk walk when the page has run ahead of him
-      const paceWant = Math.min(far / 0.4, Math.max(PACE, far / 0.9));
+      // (the user: he doesn't lift the can to spray while he is moving, he has to be standing still first.) So he
+      // either walks or works, never both: at work he stays planted and reaches for the spot until it has got half
+      // a metre away from him, then lets go of the trigger, lowers the gun, steps over, stops, and only then lifts
+      // it again; and the trigger waits for the gun to be up.
+      moving = first ? false : moving ? far > 0.06 : far > (s.working > 0.5 ? 0.5 : 0.12);
+      const paceWant = moving ? Math.min(far / 0.4, Math.max(PACE, far / 0.9)) : 0;
       pace += (paceWant - pace) * (1 - Math.exp(-s.dt / 0.12));
-      if (far > 1e-4) own.addScaledVector(gap, Math.min(far, pace * s.dt) / far);
-      const away = THREE.MathUtils.smoothstep(far, 0.3, 0.7);
-      const here = 1 - THREE.MathUtils.smoothstep(far, 0.15, 0.6);
-      s = { ...s, at: own, working: s.working * here, spraying: s.spraying * here, yaw: away > 0 ? lerpYaw(s.yaw, Math.atan2(gap.x, gap.z), away) : s.yaw };
+      if (moving && far > 1e-4) own.addScaledVector(gap, Math.min(far, pace * s.dt) / far);
+      const away = moving ? THREE.MathUtils.smoothstep(far, 0.3, 0.7) : 0;
+      const here = moving ? 0 : 1 - THREE.MathUtils.smoothstep(speed, 0.05, 0.3);
+      const gunUp = THREE.MathUtils.smoothstep(workS, 0.8, 0.97);
+      s = { ...s, at: own, working: s.working * here, spraying: s.spraying * here * gunUp, yaw: away > 0 ? lerpYaw(s.yaw, Math.atan2(gap.x, gap.z), away) : s.yaw };
       // His own way of standing (style), turned in from the way he walks once he has stopped to work.
       const yawWant = s.yaw + style.yaw * s.working;
       if (first) yawS = yawWant;
