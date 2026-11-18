@@ -52,7 +52,7 @@ const SPRAYER = { enter: [0.36, 0.42], spray: [0.42, 0.88], exit: [0.88, 0.93], 
 const LIGHT_GAIN = { Ceiling_Fill: 0.42, Top_Softbox: 0.4, Fill_Cool: 0.42, Key_Under: 1 /* steady under-car fill: off, the black coat had nothing to catch and went dark; what the user minded was the glow that came on with the spray (Spray_Glow) */, Spray_Glow: 0 /* the user: no light coming on where they spray */ };
 const ENV_INTENSITY = 0.9;
 const FLOOR_BOUNCE = 0.8;
-const UNDER_FILL = { z: [-1.7, 0, 1.7], y: 0.5, cd: 2.6 };
+const UNDER_FILL = { z: [-1.7, 0, 1.7], y: -0.45, cd: 8 }; // (under the floor, which casts no shadow: above it, each one laid a glaring streak down the glossy epoxy, the user: a lamp on the floor)
 // Opening, played once on load (seconds): the garage is dark, the car's lamps come on, the ceiling LEDs strike
 // row by row from the far wall towards the camera, then the lift raises the car, watched head-on, into the
 // story's first shot. Scrolling during it fast-forwards it.
