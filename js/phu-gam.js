@@ -52,7 +52,7 @@ const SPRAYER = { enter: [0.36, 0.42], spray: [0.42, 0.88], exit: [0.88, 0.93], 
 const LIGHT_GAIN = { Ceiling_Fill: 0.42, Top_Softbox: 0.4, Fill_Cool: 0.42, Key_Under: 1 /* steady under-car fill: off, the black coat had nothing to catch and went dark; what the user minded was the glow that came on with the spray (Spray_Glow) */, Spray_Glow: 0 /* the user: no light coming on where they spray */ };
 const ENV_INTENSITY = 0.9;
 const FLOOR_BOUNCE = 0.8;
-const UNDER_FILL = { z: [-1.7, 0, 1.7], y: -0.45, cd: 8 }; // (under the floor, which casts no shadow: above it, each one laid a glaring streak down the glossy epoxy, the user: a lamp on the floor)
+const UNDER_FILL = 2.4; // the up-light under the floor (which casts no shadow; from above the floor it laid a glaring streak down the epoxy)
 // Opening, played once on load (seconds): the garage is dark, the car's lamps come on, the ceiling LEDs strike
 // row by row from the far wall towards the camera, then the lift raises the car, watched head-on, into the
 // story's first shot. Scrolling during it fast-forwards it.
@@ -374,12 +374,14 @@ function addLights(data) {
   roomLights.push({ light: bounce, base: bounce.intensity });
   // and a steady row of soft lights low under the car, nose to tail, always on: the black coat needs something to
   // catch, but nothing that comes on with the spray or follows it
-  for (const z of UNDER_FILL.z) {
-    const fill = new THREE.PointLight(0xf4f6fa, UNDER_FILL.cd, 0, 2);
-    fill.position.set(0, UNDER_FILL.y, z);
-    scene.add(fill);
-    roomLights.push({ light: fill, base: fill.intensity });
-  }
+  // (one light straight up from far below, the same strength at every height: as lamps just under the floor they
+  // were forty times brighter on a man's legs beside them than on the underbody, and with the camera close behind
+  // him his blown-out jeans filled the screen white, the user's "white oval")
+  const fill = new THREE.DirectionalLight(0xf4f6fa, UNDER_FILL);
+  fill.position.set(0, -10, 0);
+  fill.target.position.set(0, 0, 0);
+  scene.add(fill, fill.target);
+  roomLights.push({ light: fill, base: fill.intensity });
   for (const L of data.lights) {
     const color = new THREE.Color().setRGB(...L.color);
     const dir = new THREE.Vector3().fromArray(L.dir);
@@ -794,6 +796,8 @@ function updateOne(sprayer, c, p, e, dt) {
   sprayer.update({
     // (solid in the explore view too, standing at their places: half faded they were ghosts, legs without a body)
     visible: clear,
+    // (he fades by where he himself is: he walks to `at` on his own feet and may not be there yet)
+    eye: camera.position,
     at: sprayAt,
     yaw,
     target: sprayTarget,
@@ -1382,6 +1386,9 @@ function lerpShot(a, b, k) {
 
 // Orbit around the car; starts exactly at the story's last shot so the hand-over is seamless.
 const orbit = { az: 0, el: 0, dist: 5, az0: 0, el0: 0, ready: false };
+// how far from the room's middle the orbiting camera may be (the walls stand at x ±6.95, z ±7.95, the ceiling at 5.2,
+// the hex lights at 4.75)
+const ROOM = { x: 6.3, z: 7.3, y: 4.4 };
 
 function initOrbit() {
   const off = new THREE.Vector3(...STORY_CAM[STORY_CAM.length - 1].pos).sub(ORBIT_TARGET);
@@ -1393,9 +1400,12 @@ function initOrbit() {
 
 function orbitPosition(out) {
   const c = Math.cos(orbit.el);
-  return out.set(Math.sin(orbit.az) * c, Math.sin(orbit.el), Math.cos(orbit.az) * c)
-    .multiplyScalar(orbit.dist)
-    .add(ORBIT_TARGET);
+  out.set(Math.sin(orbit.az) * c, Math.sin(orbit.el), Math.cos(orbit.az) * c);
+  // (the room has walls and a ceiling again: round the back and the sides the orbit's radius took the camera into
+  // them, and the screen was a blank pale wall, the user's "white oval") the camera stays inside the room, coming
+  // in closer to the car where the room is narrower than the orbit
+  const reach = Math.min(orbit.dist, ROOM.x / Math.max(Math.abs(out.x), 1e-4), ROOM.z / Math.max(Math.abs(out.z), 1e-4), out.y > 0 ? (ROOM.y - ORBIT_TARGET.y) / Math.max(out.y, 1e-4) : Infinity);
+  return out.multiplyScalar(reach).add(ORBIT_TARGET);
 }
 
 // ---------- Opening ----------

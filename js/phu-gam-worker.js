@@ -808,6 +808,14 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) 
      *                    target (world point being sprayed), spraying (0..1), dt (seconds), scale (px per m at 1 m)
      */
     update(s) {
+      // (s.eye: the camera. He fades as it comes within arm's length of where he is standing, which is his own
+      // place on the floor once he is walking, not the page's s.at: measured from s.at, a man still on his way was
+      // solid with the camera inside him)
+      if (s.eye) {
+        const spot = Number.isNaN(lastPos.x) ? s.at : own;
+        const off = Math.hypot(s.eye.x - spot.x, s.eye.z - spot.z, Math.max(0, s.eye.y - 1.75));
+        s = { ...s, visible: Math.min(s.visible, THREE.MathUtils.smoothstep(off, 0.55, 1.05)) };
+      }
       const show = s.visible > 0.001;
       root.visible = show;
       mist.visible = show;
