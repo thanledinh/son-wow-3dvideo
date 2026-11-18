@@ -516,6 +516,25 @@ function wearBody(bodyGltf, root, model, bones, materials) {
       materials.push(o.material);
     }
   });
+  // depth-only copies of his meshes, on the same skeleton, drawn just before them while he fades (see update)
+  const shells = [];
+  const hollow = new THREE.MeshBasicMaterial({ colorWrite: false, transparent: true });
+  body.traverse((o) => {
+    if (!o.isSkinnedMesh) return;
+    const shell = new THREE.SkinnedMesh(o.geometry, Array.isArray(o.material) ? o.material.map(() => hollow) : hollow);
+    shell.position.copy(o.position);
+    shell.quaternion.copy(o.quaternion);
+    shell.scale.copy(o.scale);
+    shell.frustumCulled = false;
+    shell.visible = false;
+    shell.renderOrder = 10;
+    o.renderOrder = 11;
+    shells.push([o, shell]);
+  });
+  for (const [o, shell] of shells) {
+    o.parent.add(shell);
+    shell.bind(o.skeleton, o.bindMatrix);
+  }
   const top = byName.Bip01;
   // his size: the driver's height (taller, his head met the exhaust)
   root.updateMatrixWorld(true);
@@ -558,7 +577,8 @@ function wearBody(bodyGltf, root, model, bones, materials) {
   const mid = new THREE.Vector3();
   const turnOf = (pr) => pr.d.getWorldQuaternion(q).multiply(pr.fit);
 
-  return () => {
+  return Object.assign(pose, { shells: shells.map(([, shell]) => shell) });
+  function pose() {
     top.parent.worldToLocal(bones.Hips.getWorldPosition(p).add(topOff));
     top.position.copy(p);
     top.updateMatrixWorld(true);
@@ -570,7 +590,7 @@ function wearBody(bodyGltf, root, model, bones, materials) {
       reach(a.t, b.t, c.t, p.clone(), mid.clone());
       setWorldQuaternion(c.t, turnOf(c));
     }
-  };
+  }
 }
 
 export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) {
@@ -820,16 +840,17 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) 
         lastPos.set(NaN, 0, 0);
         return;
       }
-      // Fading near the camera is a dither (alphaHash), not a blend (the user: his clothes still ran through each
-      // other): blended, a half-faded man showed his far sleeve and the inside of his shirt through the near side.
+      // Fading near the camera: a plain see-through fade, but of his outside only. Blended as he was, a half-faded
+      // man showed his far sleeve and the inside of his shirt through the near side (the user: his clothes ran
+      // through each other); dithered instead, he broke up into grains (the user: weird). So while he fades his
+      // shape is laid into the depth buffer first (wearBody's `shells`, drawn without colour), and the fade only
+      // paints what is nearest the eye.
+      const fading = s.visible < 0.999;
       for (const m of materials) {
-        if (!m.alphaHash) {
-          m.alphaHash = true;
-          m.transparent = false;
-          m.needsUpdate = true;
-        }
+        m.transparent = fading;
         m.opacity = s.visible;
       }
+      if (wear) for (const shell of wear.shells) shell.visible = fading;
 
       // Life in the pose (the user: he moved and sprayed stiffly). Nothing snaps: his facing and his aim ease
       // towards where they should be; the gun strokes from side to side while he sprays, his trunk swaying with
