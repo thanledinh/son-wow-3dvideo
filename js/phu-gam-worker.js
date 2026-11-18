@@ -124,49 +124,17 @@ function mistMaterial() {
   });
 }
 
-// GB's can as in the shop's photo: blue with the white "GB" mark and "UBS R" down its length, the lower part
-// white with a blue dot screen, a silver base. Drawn once; u runs round the can, v from base (0) to top (1).
+// GB's can: the label is the shop's own product photo (the user: change the coating to this one), unwrapped round
+// the can by a tool kept outside the repo into assets/phu-gam/can-label.webp. u runs round the can with the front
+// of the label at u = 0.5, v from the base (0) to the shoulder (1). One texture, shared by every can in the shop.
+let label = null;
 export function canLabel() {
-  const c = document.createElement("canvas");
-  c.width = 512;
-  c.height = 512;
-  const g = c.getContext("2d");
-  const blue = g.createLinearGradient(0, 0, 0, 512);
-  blue.addColorStop(0, "#2f6fc4");
-  blue.addColorStop(0.6, "#1f4f9c");
-  g.fillStyle = blue;
-  g.fillRect(0, 0, 512, 512);
-  // the lower third: white with blue dots thinning out downwards
-  g.fillStyle = "#e9edf2";
-  g.fillRect(0, 330, 512, 182);
-  g.fillStyle = "#2a63b5";
-  for (let y = 330; y < 470; y += 9) {
-    for (let x = (y / 9) % 2 ? 4 : 0; x < 512; x += 9) g.beginPath(), g.arc(x, y, 3.6 * (1 - (y - 330) / 150), 0, Math.PI * 2), g.fill();
+  if (!label) {
+    label = new THREE.TextureLoader().load("assets/phu-gam/can-label.webp?v=2");
+    label.colorSpace = THREE.SRGBColorSpace;
+    label.anisotropy = 4;
   }
-  g.fillStyle = "#b9bfc6"; // silver base
-  g.fillRect(0, 488, 512, 24);
-  // the front of the can (u 0.25..0.75 faces out): mark and name, turned to read along the can
-  g.save();
-  g.translate(256, 170);
-  g.rotate(-Math.PI / 2);
-  g.fillStyle = "#ffffff";
-  g.textAlign = "center";
-  g.textBaseline = "middle";
-  g.font = "900 64px Arial, sans-serif";
-  g.fillText("GB", 0, -70);
-  g.font = "900 58px Arial, sans-serif";
-  g.fillText("UBS R", 0, 0);
-  g.font = "600 17px Arial, sans-serif";
-  g.fillText("UNDER BODY COATING", 0, 52);
-  g.restore();
-  g.fillStyle = "#1f4f9c";
-  g.font = "700 22px Arial, sans-serif";
-  g.textAlign = "center";
-  g.fillText("1L", 256, 470);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
-  return t;
+  return label;
 }
 
 function buildGun() {
