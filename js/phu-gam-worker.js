@@ -568,22 +568,29 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) 
   const model = workerGltf.scene;
   root.add(model);
   model.updateMatrixWorld(true);
+  // (the avatar's file is now only its skeleton: it is the unseen driver of the Rocketbox body, wearBody. Without a
+  // skin the loader gives its joints as plain nodes, not Bones, so they are taken by name; and its height is read
+  // off the top-of-head joint, which sits within 2 mm of where the mesh's crown was)
+  const joint = (o) => !o.isMesh && /_\d+$/.test(o.name);
+  const bones = {};
+  model.traverse((o) => {
+    if (joint(o)) bones[o.name.replace(/_\d+$/, "")] = o;
+  });
   const box = new THREE.Box3().setFromObject(model);
-  model.scale.setScalar(HEIGHT / (box.max.y - box.min.y));
+  const tall = box.isEmpty() ? bones.HeadTop_End.getWorldPosition(new THREE.Vector3()).y : box.max.y - box.min.y;
+  model.scale.setScalar(HEIGHT / tall);
   model.updateMatrixWorld(true);
   scene.add(root);
 
-  const bones = {};
   model.traverse((o) => {
-    if (o.isBone) bones[o.name.replace(/_\d+$/, "")] = o;
     if (o.isMesh) {
       o.frustumCulled = false; // skinned bounds don't follow the pose
       o.material.transparent = false;
     }
   });
   const rest = new Map();
-  model.traverse((o) => o.isBone && rest.set(o, o.quaternion.clone()));
-  dress(model, bones);
+  model.traverse((o) => joint(o) && rest.set(o, o.quaternion.clone()));
+  if (!box.isEmpty()) dress(model, bones);
   const materials = [];
   model.traverse((o) => o.isMesh && materials.push(o.material));
 
