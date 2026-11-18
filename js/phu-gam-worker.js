@@ -868,8 +868,10 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) 
       }
       const gap = v2.copy(s.at).sub(own).setY(0);
       const far = gap.length();
-      const paceWant = Math.min(far / 0.4, PACE * (far > 3 ? 2.5 : 1));
-      pace += (paceWant - pace) * (1 - Math.exp(-s.dt / 0.22));
+      // (the user: by the time he had walked in, the page had been scrolled past) however far behind, he is there in
+      // about a second: an easy pace for a step or two, a brisk walk when the page has run ahead of him
+      const paceWant = Math.min(far / 0.4, Math.max(PACE, far / 0.9));
+      pace += (paceWant - pace) * (1 - Math.exp(-s.dt / 0.12));
       if (far > 1e-4) own.addScaledVector(gap, Math.min(far, pace * s.dt) / far);
       const away = THREE.MathUtils.smoothstep(far, 0.3, 0.7);
       const here = 1 - THREE.MathUtils.smoothstep(far, 0.15, 0.6);
@@ -901,7 +903,9 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) 
       }
       // (the recording is a brisk walk with a long stride: at full weight, carrying the gun across a shop floor, he
       // lunged; STEP of it, blended with standing, is an easy working pace)
-      const gait = STEP * THREE.MathUtils.smoothstep(speed / PACE, 0.04, 0.8);
+      // (hurrying, he takes the recording's full stride)
+      const gait = THREE.MathUtils.lerp(STEP, 1, THREE.MathUtils.smoothstep(speed, PACE, PACE * 1.6)) * THREE.MathUtils.smoothstep(speed / PACE, 0.04, 0.8);
+      const still = Math.max(0, 1 - gait / STEP);
       if (!first) {
         const step = v1.copy(s.at).sub(lastPos);
         walked += (step.x * Math.sin(yaw) + step.z * Math.cos(yaw)) / Math.max(gait, 0.2);
@@ -931,7 +935,7 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) 
       mixer.update(0);
       // (the user: he stood limp, swishy) the recorded idle rests its weight on one hip; standing at work he is
       // squarer: most of that hip tilt and shift is taken back out, and the feet go apart (below)
-      const square = 0.65 * (1 - gait / STEP);
+      const square = 0.65 * still;
       bones.Hips.quaternion.slerp(rest.get(bones.Hips), square);
       bones.Hips.position.x += (hipsRest.x - bones.Hips.position.x) * square;
       bones.Spine.quaternion.slerp(rest.get(bones.Spine), square * 0.6);
@@ -952,9 +956,9 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) 
       for (const [side, sign] of [["Left", 1], ["Right", -1]]) {
         const leg = legs[side];
         // (a working man's stance: feet a shoulder's width apart whenever he is standing, toes a little out)
-        const apart = STANCE * (1 - gait / STEP) + style.wide * plant;
+        const apart = STANCE * still + style.wide * plant;
         const foot = leg.foot.addScaledVector(rightV, -sign * apart).addScaledVector(fwdV, sign * style.stagger * plant);
-        leg.turn.premultiply(toeOut.setFromAxisAngle(UP, sign * 0.14 * (1 - gait / STEP)));
+        leg.turn.premultiply(toeOut.setFromAxisAngle(UP, sign * 0.14 * still));
         // knees bend forward and a little out over the toes
         const knee = leg.knee.addScaledVector(fwdV, 0.5).addScaledVector(rightV, -0.1 * sign);
         reach(bones[`${side}UpLeg`], bones[`${side}Leg`], bones[`${side}Foot`], foot, knee);
