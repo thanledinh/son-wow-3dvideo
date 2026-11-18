@@ -711,6 +711,10 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) 
 
   let walked = 0;
   let speed = 0;
+  let pace = 0;
+  const own = new THREE.Vector3();
+  const PACE = 1.25; // m/s, an unhurried walk across a shop floor
+  const lerpYaw = (a, b, t) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * t;
   let clock = 0;
   let yawS = 0;
   const strokePhase = Math.random() * Math.PI * 2; // the two men don't stroke in step
@@ -827,6 +831,22 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) 
       // turning on the spot his feet step round.
       clock += s.dt;
       const first = Number.isNaN(lastPos.x);
+      // He walks at a man's pace, whatever the page does (the user: fix how he moves): the page says where he should
+      // be (s.at, tied to the scroll, so a flick of the wheel used to shoot him across the floor with his legs
+      // spinning); he goes there on his own feet, speeding up and slowing down, at walking pace (quicker only if
+      // left far behind). On the way he faces where he is going, and he gets to work once he has arrived.
+      if (first) {
+        own.copy(s.at);
+        pace = 0;
+      }
+      const gap = v2.copy(s.at).sub(own).setY(0);
+      const far = gap.length();
+      const paceWant = Math.min(far / 0.4, PACE * (far > 3 ? 2.5 : 1));
+      pace += (paceWant - pace) * (1 - Math.exp(-s.dt / 0.22));
+      if (far > 1e-4) own.addScaledVector(gap, Math.min(far, pace * s.dt) / far);
+      const away = THREE.MathUtils.smoothstep(far, 0.3, 0.7);
+      const here = 1 - THREE.MathUtils.smoothstep(far, 0.15, 0.6);
+      s = { ...s, at: own, working: s.working * here, spraying: s.spraying * here, yaw: away > 0 ? lerpYaw(s.yaw, Math.atan2(gap.x, gap.z), away) : s.yaw };
       // His own way of standing (style), turned in from the way he walks once he has stopped to work.
       const yawWant = s.yaw + style.yaw * s.working;
       if (first) yawS = yawWant;
@@ -845,16 +865,17 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) 
       }
       tgt.lerp(aimPt, 1 - Math.exp(-s.dt * 9));
       headT.lerp(tgt, 1 - Math.exp(-s.dt * 4));
-      // Walk distance along the way he faces, for the stepping cycle; the steps fade out when he stops. Turning
-      // counts as walking too, so a man turning on the spot shuffles his feet round.
+      // The stepping cycle runs on the ground covered along the way he faces. Slower than a full walk, the recorded
+      // stride is blended down towards standing (shorter steps), and the cycle is paced to those shorter steps so
+      // the feet still don't slide. (Turning on the spot no longer plays the walk: full strides in place.)
       if (!first) {
         const step = v1.copy(s.at).sub(lastPos);
         const along = step.x * Math.sin(yaw) + step.z * Math.cos(yaw);
-        walked += along + Math.abs(turn) * 0.22;
-        speed = THREE.MathUtils.lerp(speed, (step.length() + Math.abs(turn) * 0.22) / Math.max(s.dt, 1e-3), 0.15);
+        speed += (step.length() / Math.max(s.dt, 1e-3) - speed) * (1 - Math.exp(-s.dt / 0.15));
+        walked += along / Math.max(THREE.MathUtils.clamp(speed / PACE, 0, 1), 0.35);
       }
       lastPos.copy(s.at);
-      const gait = THREE.MathUtils.clamp(speed / 0.35, 0, 1);
+      const gait = THREE.MathUtils.smoothstep(speed / PACE, 0.04, 1);
       const crouch = THREE.MathUtils.lerp(CROUCH, style.crouch, s.working);
       const sway = Math.sin(phase - 0.5) * s.spraying;
 
@@ -941,7 +962,11 @@ export function createWorker(workerGltf, scene, styleIn = {}, motion, bodyGltf) 
       headW.copy(headT)
         .addScaledVector(rightV, 0.35 * wander * Math.sin(clock * 0.43 + strokePhase))
         .add(v1.set(0, 0.12 * wander * Math.sin(clock * 0.61 + 2), 0));
-      aim(bones.Head, eyes, headW, style.head);
+      // (never further than a neck turns: walking in with the spot off to one side, his head lolled onto his
+      // shoulder; and on the way there he mostly looks where he is going)
+      const neck = bones.Head.getWorldPosition(v3);
+      const off = v2.copy(eyes).sub(neck).angleTo(v1.copy(headW).sub(neck));
+      aim(bones.Head, eyes, headW, style.head * Math.min(1, 0.55 / Math.max(off, 1e-3)) * (0.25 + 0.75 * s.working));
 
       if (wear) wear();
 
