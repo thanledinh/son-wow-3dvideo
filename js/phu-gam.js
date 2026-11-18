@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { HDRLoader } from "three/addons/loaders/HDRLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
 import { buildCorner, setWrap } from "./phu-gam-corner.js";
@@ -48,7 +49,7 @@ const SPRAYER = { enter: [0.36, 0.42], spray: [0.42, 0.88], exit: [0.88, 0.93], 
 // Blender light watts -> three.js intensities (area: W / (area·π), point: W / 4π), times a gain per light.
 // Gains are set by eye against GB's renders: without the file's shadows and bounce the big ceiling lights
 // wash the garage out, while the floor light under the car is what draws the highlights on the coat.
-const LIGHT_GAIN = { Ceiling_Fill: 0.28, Top_Softbox: 0.28, Fill_Cool: 0.3, Key_Under: 1, Spray_Glow: 1 };
+const LIGHT_GAIN = { Ceiling_Fill: 0.42, Top_Softbox: 0.4, Fill_Cool: 0.42, Key_Under: 1, Spray_Glow: 1 };
 const ENV_INTENSITY = 0.9;
 // Opening, played once on load (seconds): the garage is dark, the car's lamps come on, the ceiling LEDs strike
 // row by row from the far wall towards the camera, then the lift raises the car, watched head-on, into the
@@ -392,9 +393,13 @@ function addLights(data) {
 // dark epoxy fading into fog; light bars stand round the car, which put long reflections down its sides (they are
 // in the baked environment too); the lift is graphite instead of blue and yellow.
 const STUDIO = {
-  bg: 0x0b0c0e,
-  fog: [8, 22],
-  hide: new Set(["Garage_Wall_Blue", "Garage_Wall_Grey", "Garage_Trim_White", "Garage_Roof", "Garage_Shutter", "Garage_Truss"]),
+  // (the user's boss: no showroom is that dark) lit up: the walls are back, in a showroom's pale grey, the floor is
+  // mid-grey epoxy and the room beyond is a soft grey instead of black
+  bg: 0x3a3d42,
+  fog: [14, 40],
+  hide: new Set(["Garage_Roof", "Garage_Shutter", "Garage_Truss"]),
+  walls: { Garage_Wall_Blue: 0.42, Garage_Wall_Grey: 0.5, Garage_Trim_White: 0.7 },
+  floor: { tile: 0.07, line: 0.16 },
   bars: { at: [[4.1, 3.3], [-4.1, 3.3], [4.1, -3.3], [-4.1, -3.3]], bottom: 0.25, height: 2.7, width: 0.09, glow: 6 },
 };
 const lightBars = [];
@@ -451,11 +456,18 @@ function prepareModel(root) {
     // The floor: dark polished epoxy, the bay's lines a shade lighter.
     if (m.name.startsWith("Garage_Tile")) {
       m.map = null;
-      m.color.setScalar(m.name === "Garage_Tile_Yellow" ? 0.05 : 0.018);
-      m.roughness = m.name === "Garage_Tile_Yellow" ? 0.45 : 0.2;
+      m.color.setScalar(m.name === "Garage_Tile_Yellow" ? STUDIO.floor.line : STUDIO.floor.tile);
+      m.roughness = m.name === "Garage_Tile_Yellow" ? 0.45 : 0.28;
       m.metalness = 0;
       m.roughnessMap = m.metalnessMap = null;
       if (m.normalMap) m.normalScale.multiplyScalar(0.4);
+    }
+    if (STUDIO.walls[m.name]) {
+      m.map = null;
+      m.color.setScalar(STUDIO.walls[m.name]);
+      m.roughness = 0.85;
+      m.metalness = 0;
+      m.roughnessMap = m.metalnessMap = null;
     }
     if (m.name === "Garage_LED_Hex") ledRows(o);
     if (m.name === LAMP_MATS.reflector) headlampReflector(m);
@@ -1049,14 +1061,23 @@ function ledRows(mesh) {
 }
 
 // The garage seen from the car's spot, without the car, is what the paint and glass reflect.
-function bakeEnvironment() {
-  // (the sprayer too: standing at the origin in his rest pose, his orange jacket tinted the floor and paint)
-  const hidden = [car, ...sprayers.map((s) => s.root)].filter(Boolean);
-  hidden.forEach((o) => (o.visible = false));
+// (the user: find a showroom's lighting) With `hdr`, the light of a real, bright car workshop instead: Poly Haven's
+// "Autoshop 01" (CC0), a photographed panorama, lights everything and is what the paint mirrors. The room that is
+// seen is still the modelled one.
+function bakeEnvironment(hdr) {
   const pmrem = new THREE.PMREMGenerator(renderer);
-  const env = pmrem.fromScene(scene, 0.02, 0.1, 40, { size: 256, position: new THREE.Vector3(0, 1.6, 0) });
+  let env;
+  if (hdr) {
+    env = pmrem.fromEquirectangular(hdr);
+    hdr.dispose();
+  } else {
+    // (the sprayer too: standing at the origin in his rest pose, his orange jacket tinted the floor and paint)
+    const hidden = [car, ...sprayers.map((s) => s.root)].filter(Boolean);
+    hidden.forEach((o) => (o.visible = false));
+    env = pmrem.fromScene(scene, 0.02, 0.1, 40, { size: 256, position: new THREE.Vector3(0, 1.6, 0) });
+    hidden.forEach((o) => (o.visible = true));
+  }
   pmrem.dispose();
-  hidden.forEach((o) => (o.visible = true));
   scene.environment = env.texture;
   scene.environmentIntensity = ENV_INTENSITY;
 }
@@ -1500,6 +1521,9 @@ async function start() {
     gltfLoader.loadAsync(`assets/phu-gam/worker-walk.glb?v=${VERSION}`),
   ]);
   const motion = { idle: idleGltf.animations[0], walk: walkGltf.animations[0] };
+  // the showroom's light (bakeEnvironment); without it the page falls back to the modelled room's own
+  const hdr = await new HDRLoader().loadAsync(`assets/phu-gam/showroom.hdr?v=${VERSION}`).catch(() => null);
+  if (hdr) hdr.mapping = THREE.EquirectangularReflectionMapping;
   frames = data.frames;
   addLights(data);
   prepareModel(gltf.scene);
@@ -1573,7 +1597,7 @@ async function start() {
     createWorker(workerGltfB, scene, { crouch: 0.08, stagger: -0.05, wide: 0.06, yaw: 0, lean: 0.03, grip: [0.36, 0.2, 0.16], head: 0.6, air: [-1.55, 0.85, -0.29] }, motion),
   ];
   initOrbit();
-  bakeEnvironment();
+  bakeEnvironment(hdr);
   applyIntro(intro.t);
   storyPose(0);
   // The sprayers are hidden until they walk in, so their shaders (skin, the cut-down trousers, the sleeve panels,
