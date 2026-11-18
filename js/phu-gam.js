@@ -49,7 +49,7 @@ const SPRAYER = { enter: [0.36, 0.42], spray: [0.42, 0.88], exit: [0.88, 0.93], 
 // Blender light watts -> three.js intensities (area: W / (area·π), point: W / 4π), times a gain per light.
 // Gains are set by eye against GB's renders: without the file's shadows and bounce the big ceiling lights
 // wash the garage out, while the floor light under the car is what draws the highlights on the coat.
-const LIGHT_GAIN = { Ceiling_Fill: 0.42, Top_Softbox: 0.4, Fill_Cool: 0.42, Key_Under: 1, Spray_Glow: 1 };
+const LIGHT_GAIN = { Ceiling_Fill: 0.42, Top_Softbox: 0.4, Fill_Cool: 0.42, Key_Under: 0 /* the user: no lamp shining up under the car */, Spray_Glow: 1 };
 const ENV_INTENSITY = 0.9;
 // Opening, played once on load (seconds): the garage is dark, the car's lamps come on, the ceiling LEDs strike
 // row by row from the far wall towards the camera, then the lift raises the car, watched head-on, into the
