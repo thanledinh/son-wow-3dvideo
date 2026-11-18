@@ -126,11 +126,12 @@ function mistMaterial() {
 
 // GB's can: the label is the shop's own product photo (the user: change the coating to this one), unwrapped round
 // the can by a tool kept outside the repo into assets/phu-gam/can-label.webp. u runs round the can with the front
-// of the label at u = 0.5, v from the base (0) to the shoulder (1). One texture, shared by every can in the shop.
+// of the label at u = 0.5 and the same label again on the back (the user: the back like the front), v from the base
+// (0) to the shoulder (1). One texture, shared by every can in the shop.
 let label = null;
 export function canLabel() {
   if (!label) {
-    label = new THREE.TextureLoader().load("assets/phu-gam/can-label.webp?v=2");
+    label = new THREE.TextureLoader().load("assets/phu-gam/can-label.webp?v=3");
     label.colorSpace = THREE.SRGBColorSpace;
     label.anisotropy = 4;
   }
