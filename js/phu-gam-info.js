@@ -13,32 +13,23 @@ const boards = document.querySelector(".boards");
 const chapters = [...boards.querySelectorAll(".page")].map((el) => ({ el, imgs: [...el.querySelectorAll(".poster")], first: 0, last: 0 }));
 const wide = matchMedia("(min-width: 1000px)");
 
-// Tấm đầu (poster-cao-cap.webp) là ảnh WebP động chạy MỘT lần (loop = 1). Muốn chạy lại thì phải nạp lại ảnh: lấy file một
-// lần về thành blob, mỗi lần cần chạy lại thì gán cho ảnh một địa chỉ blob mới (không tải lại qua mạng).
+// Tấm đầu (poster-cao-cap.mp4) là đoạn phim ngắn không tiếng, chạy MỘT lần rồi dừng ở khung cuối; mỗi lần lướt tới lại
+// thì tua về đầu và chạy lại. (Trước đây là ảnh WebP động cắt còn 10 hình/giây cho nhẹ; người dùng: nhìn lag quá. Phim
+// giữ đủ 24 hình/giây của bản gốc mà nhẹ bằng nửa.)
 const hero = chapters[0]?.imgs[0];
-let heroBlob = null;
-let heroUrl = "";
 let heroSeen = false;
-let heroFetching = false;
+let heroReady = false;
 function fetchHero() {
-  if (!hero || heroBlob || heroFetching) return;
-  heroFetching = true;
-  // (tải một lần duy nhất: file về thành blob, rồi chính blob đó là ảnh; cùng blob dùng lại cho các lần chạy lại)
-  fetch(hero.dataset.src)
-    .then((r) => r.blob())
-    .then((b) => {
-      heroBlob = b;
-      hero.dataset.loaded = "1";
-      replayHero();
-    })
-    .catch(() => (heroFetching = false));
+  if (!hero || heroReady) return;
+  heroReady = true;
+  hero.src = hero.dataset.src;
+  hero.dataset.loaded = "1";
+  replayHero();
 }
 function replayHero() {
-  if (!hero || !heroBlob) return;       // (chưa có file về thì ảnh còn đang chạy lần đầu, khỏi nạp lại)
-  const next = URL.createObjectURL(heroBlob);
-  hero.src = next;
-  if (heroUrl) URL.revokeObjectURL(heroUrl);
-  heroUrl = next;
+  if (!hero || !heroReady) return;
+  try { hero.currentTime = 0; } catch { /* chưa có dữ liệu: cứ phát từ đầu */ }
+  hero.play?.().catch(() => {});        // (tắt tiếng + playsinline nên trình duyệt cho tự phát)
 }
 const track = document.createElement("div");
 track.className = "deck-track";
