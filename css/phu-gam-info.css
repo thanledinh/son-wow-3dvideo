@@ -63,15 +63,16 @@
    (clip-path do js/phu-gam-info.js đặt, cùng hai mép với hình vẽ của vệt). */
 .deck-track { position: relative; }
 .deck-stage { position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden; border-radius: 32px 32px 0 0; }
-.deck { position: absolute; inset: 0; display: grid; place-items: center; padding: 66px 0 calc(var(--route-gap) + 62px); visibility: hidden; }
+/* (người dùng: cho ảnh full size giao diện) poster cao trọn màn hình, không chừa lề trên dưới; thanh lộ trình nổi đè lên đáy */
+.deck { position: absolute; inset: 0; display: grid; place-items: center; padding: 0; visibility: hidden; }
 .deck.on { visibility: visible; }
 .lift {
   --n: 1;
   /* poster cao vừa một màn hình, hoặc hẹp lại cho đủ --n tấm nằm gọn trong màn hình */
-  --ph: min(100svh - var(--route-gap) - 150px, (min(100vw, 1700px) - 36px - (var(--n) - 1) * 22px) / (var(--n) * 0.5625));
+  --ph: min(100svh, (100vw - (var(--n) - 1) * 10px) / (var(--n) * 0.5625));
 }
-.deck-row { display: flex; gap: 22px; }
-.deck-row .poster { width: auto; height: var(--ph); aspect-ratio: 9 / 16; margin: 0; box-shadow: 0 24px 50px rgba(0, 0, 0, 0.55); }
+.deck-row { display: flex; gap: 10px; }
+.deck-row .poster { width: auto; height: var(--ph); aspect-ratio: 9 / 16; margin: 0; border-radius: 0; box-shadow: 0 24px 50px rgba(0, 0, 0, 0.55); }
 /* vệt phun: vẽ bằng canvas (js/phu-gam-info.js, hàm paintSpray): lớp phủ đen bóng ướt, mép loang tự nhiên, sương phun và cây
    súng GB chạy dọc mép đầu. Phần trang cũ và trang mới được cắt bằng clip-path theo đúng hai mép của vệt. */
 .deck-coat { position: absolute; z-index: 2; inset: 0; width: 100%; height: 100%; pointer-events: none; visibility: hidden; }
