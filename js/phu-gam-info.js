@@ -289,6 +289,7 @@ function startOf(leg) {
 }
 function goTo(leg) {
   const y = startOf(leg) + (leg.chapter ? 2 : 0);
+  letFree();
   scrollTo({ top: y, behavior: "smooth" });
 }
 
@@ -330,8 +331,70 @@ function place() {
   }
 }
 
+// ----- hãm -----
+// (người dùng: lướt mạnh là nó bay quá đà, thêm cái hãm lại.) Mỗi lần lướt chỉ qua được MỘT trang poster: vị trí cuộn bị
+// chặn ở chỗ trang kế vừa lên hết (lướt mạnh tới đâu thì vệt phun cũng quét xong rồi dừng ở trang kế). Chốt chặn nhả khi
+// cuộn đã dừng (IDLE), hoặc sau khi giữ HOLD_MS (để người lăn chuột liên tục không bị kẹt), rồi dời sang trang kế tiếp.
+// Bấm chấm lộ trình / menu và phím Home, End thì không hãm.
+const IDLE = 140;
+const HOLD_MS = 450;
+let restY = scrollY;      // vị trí lúc bắt đầu lần lướt này
+let lo = -Infinity;
+let hi = Infinity;
+let armed = false;
+let free = false;
+let heldAt = 0;
+let idleTimer = 0;
+function limits() {
+  const { top, seg } = span();
+  const base = top + scrollY;
+  lo = -Infinity;
+  hi = Infinity;
+  for (let i = 0; i < decks.length; i++) {
+    const r = Math.round(base + i * seg);
+    if (r < restY - 4) lo = r;
+    else if (r > restY + 4 && hi === Infinity) hi = r;
+  }
+}
+function settle() {
+  armed = false;
+  free = false;
+  heldAt = 0;
+  restY = scrollY;
+}
+function letFree() {
+  free = true;
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(settle, 400);
+}
+function brake() {
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(settle, free ? 400 : IDLE);
+  if (free) return;
+  if (!armed) {
+    armed = true;
+    limits();
+  }
+  const y = scrollY;
+  const to = y > hi ? hi : y < lo ? lo : null;
+  if (to === null) return;
+  const t = performance.now();
+  if (!heldAt) heldAt = t;
+  if (t - heldAt > HOLD_MS) {          // giữ đủ lâu mà vẫn còn cuộn: cho đi tiếp, chốt dời sang trang kế
+    heldAt = 0;
+    restY = to;
+    limits();
+    return;
+  }
+  scrollTo({ top: to, behavior: "instant" });
+}
+addEventListener("keydown", (e) => {
+  if (e.key === "Home" || e.key === "End") letFree();
+});
+
 let queued = false;
 function onScroll() {
+  brake();
   if (queued) return;
   queued = true;
   requestAnimationFrame(() => {
