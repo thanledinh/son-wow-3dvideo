@@ -19,12 +19,26 @@ const wide = matchMedia("(min-width: 1000px)");
 const hero = chapters[0]?.imgs[0];
 let heroSeen = false;
 let heroReady = false;
+// (người dùng: sếp kêu cái gif tải chậm.) Phim 0,9 MB trước đây chỉ bắt đầu tải khi lướt tới gần, mạng chậm là tới nơi
+// vẫn chưa có hình. Giờ tải sẵn cả file ngay khi cảnh 3D tải xong (lúc người xem còn ở màn START và đoạn 3D), giữ trong bộ
+// nhớ; tới nơi là phát ngay. Tải sẵn hỏng thì quay về cách cũ: gán thẳng địa chỉ file.
+let heroBlob = null;
+function preloadHero() {
+  if (!hero || heroBlob || heroReady) return;
+  heroBlob = fetch(hero.dataset.src)
+    .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(r.status))))
+    .then((b) => URL.createObjectURL(b))
+    .catch(() => null);
+}
+for (const ev of ["gam:ready", "gam:fail"]) document.addEventListener(ev, preloadHero, { once: true });
 function fetchHero() {
   if (!hero || heroReady) return;
   heroReady = true;
-  hero.src = hero.dataset.src;
   hero.dataset.loaded = "1";
-  replayHero();
+  (heroBlob || Promise.resolve(null)).then((url) => {
+    hero.src = url || hero.dataset.src;
+    replayHero();
+  });
 }
 function replayHero() {
   if (!hero || !heroReady) return;
