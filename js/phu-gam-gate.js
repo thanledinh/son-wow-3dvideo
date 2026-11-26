@@ -14,9 +14,11 @@ const Music = (() => {
   const VOL = 0.55;
   let on = false;
   let fadeT = 0;
+  let held = false;                       // video quy trình đang phát tiếng: nhạc nền nhường (xem cuối khối này)
   function set(v) {
     on = v;
     clearInterval(fadeT);
+    if (v && held) return on;             // bật loa lúc video đang chạy: ghi nhận, nhạc vào lại khi video dừng
     if (v) {
       a.volume = 0;
       a.play().catch(() => {
@@ -34,8 +36,22 @@ const Music = (() => {
   }
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) a.pause();
-    else if (on) a.play().catch(() => {});
+    else if (on && !held) a.play().catch(() => {});
   });
+  // (người dùng: vào video có thêm nhạc nữa bị đá nhau) video quy trình có tiếng riêng: lúc nó chạy thì nhạc nền dừng,
+  // video tạm dừng / hết / bị tắt tiếng thì nhạc nền vào lại nhẹ nhàng (nếu loa đang bật). Nút loa vẫn giữ trạng thái.
+  function hold(v) {
+    if (v === held) return;
+    held = v;
+    if (v) {
+      clearInterval(fadeT);
+      a.pause();
+    } else if (on && !document.hidden) set(true);
+  }
+  for (const v of document.querySelectorAll("video[controls]")) {
+    const sync = () => hold(!v.paused && !v.ended && !v.muted && v.volume > 0);
+    for (const ev of ["play", "playing", "pause", "ended", "volumechange", "emptied"]) v.addEventListener(ev, sync);
+  }
   return { set, get on() { return on; } };
 })();
 function setSound(v) {
