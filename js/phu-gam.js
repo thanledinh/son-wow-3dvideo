@@ -2,7 +2,6 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { HDRLoader } from "three/addons/loaders/HDRLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
-import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
 import { buildCorner, setWrap } from "./phu-gam-corner.js";
 import { createWorker } from "./phu-gam-worker.js";
 import { buildShop } from "./phu-gam-props.js";
@@ -52,7 +51,8 @@ const SPRAYER = { enter: [0.36, 0.42], spray: [0.42, 0.88], exit: [0.88, 0.93], 
 const LIGHT_GAIN = { Ceiling_Fill: 0.42, Top_Softbox: 0.4, Fill_Cool: 0.42, Key_Under: 1 /* steady under-car fill: off, the black coat had nothing to catch and went dark; what the user minded was the glow that came on with the spray (Spray_Glow) */, Spray_Glow: 0 /* the user: no light coming on where they spray */ };
 const ENV_INTENSITY = 0.9;
 const FLOOR_BOUNCE = 0.8;
-const UNDER_FILL = 2.4; // the up-light under the floor (which casts no shadow; from above the floor it laid a glaring streak down the epoxy)
+const CEILING = { down: 6, sky: 5 }; // what stands in for the Ceiling_Fill area light (see addLights), matched by mean brightness along the story
+const UNDER_FILL = 7.2; // (2.4 while the Key_Under area light was still there) // the up-light under the floor (which casts no shadow; from above the floor it laid a glaring streak down the epoxy)
 // Opening, played once on load (seconds): the garage is dark, the car's lamps come on, the ceiling LEDs strike
 // row by row from the far wall towards the camera, then the lift raises the car, watched head-on, into the
 // story's first shot. Scrolling during it fast-forwards it.
@@ -362,7 +362,6 @@ const beams = [];
 const lampMats = [];
 
 function addLights(data) {
-  RectAreaLightUniformsLib.init();
   bgColor.set(STUDIO.bg);
   scene.background = bgColor.clone();
   scene.fog = new THREE.Fog(STUDIO.bg, ...STUDIO.fog);
@@ -387,15 +386,17 @@ function addLights(data) {
     const dir = new THREE.Vector3().fromArray(L.dir);
     const pos = new THREE.Vector3().fromArray(L.pos);
     if (L.type === "AREA") {
-      const w = L.size;
-      const h = L.shape === "RECTANGLE" || L.shape === "ELLIPSE" ? L.size_y : L.size;
-      const light = new THREE.RectAreaLight(color, (L.energy / (w * h * Math.PI)) * (LIGHT_GAIN[L.name] ?? 0.15), w, h);
-      light.position.copy(pos);
-      // Blender's size_y runs along the car (-Z here) for the lights that point straight up or down.
-      if (Math.abs(dir.y) > 0.99) light.up.set(0, 0, -1);
-      light.lookAt(pos.clone().add(dir));
-      scene.add(light);
-      roomLights.push({ light, base: light.intensity });
+      // GB's four area lights were RectAreaLights: measured on the user's Quadro K4200 they were two thirds of every
+      // frame (24-35 ms with them, 10-12 ms without; halving the car's mesh bought 5-10%). The ceiling panel is now a
+      // light straight down plus light from the whole upper half (it lit the sides too); Top_Softbox and Fill_Cool
+      // added 1-4 levels of 255 and are dropped; Key_Under is carried by the up-light above (UNDER_FILL).
+      if (L.name !== "Ceiling_Fill") continue;
+      const down = new THREE.DirectionalLight(color, CEILING.down);
+      down.position.set(0, 10, 0);
+      down.target.position.set(0, 0, 0);
+      const sky = new THREE.HemisphereLight(color, 0x000000, CEILING.sky);
+      scene.add(down, down.target, sky);
+      roomLights.push({ light: down, base: down.intensity }, { light: sky, base: sky.intensity });
     } else if (L.name === "Spray_Glow") {
       glow.color.copy(color);
       glow.position.copy(pos);
